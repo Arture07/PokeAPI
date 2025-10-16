@@ -1,0 +1,19 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.sqlite3
+db.sqlite3
+
+# Django
+staticfiles/
+media/
+
+# Node/Angular (futuro)
+frontend/node_modules/
+frontend/dist/
+
+# VS Code
+.vscode/
