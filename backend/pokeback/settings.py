@@ -1,7 +1,10 @@
 import os
 from pathlib import Path
+from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+# Carregar variáveis do arquivo .env na raiz de backend/
+load_dotenv(BASE_DIR / '.env')
 
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "dev-secret-key-change-me")
 DEBUG = os.getenv("DEBUG", "1") == "1"
@@ -17,6 +20,9 @@ INSTALLED_APPS = [
     # third-party
     'rest_framework',
     'corsheaders',
+    # apps locais
+    'core',
+    'pokemon',
 ]
 
 MIDDLEWARE = [
@@ -81,13 +87,27 @@ USE_TZ = True
 STATIC_URL = 'static/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+# Modelo de usuário customizado
+AUTH_USER_MODEL = 'core.Usuario'
+
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
+        # JWT como padrão
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+        # manter Session para navegação no Django admin e API navegável em dev
         'rest_framework.authentication.SessionAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.AllowAny',
     ],
+}
+
+# Configuração básica do SimpleJWT (pode ser ajustada depois)
+from datetime import timedelta
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=30),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
+    'AUTH_HEADER_TYPES': ('Bearer',),
 }
 
 CORS_ALLOW_ALL_ORIGINS = True
