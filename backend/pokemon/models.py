@@ -17,9 +17,10 @@ class TipoPokemon(models.Model):
 class PokemonUsuario(models.Model):
     idPokemonUsuario = models.AutoField(primary_key=True)
     usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
-    idTipoPokemon = models.ForeignKey(TipoPokemon, on_delete=models.PROTECT)
+    # Tornar opcional: um pokémon pode ter múltiplos tipos; aqui registramos um tipo principal se disponível
+    idTipoPokemon = models.ForeignKey(TipoPokemon, on_delete=models.PROTECT, null=True, blank=True)
 
-    codigo = models.IntegerField()  # Pokédex code/id from PokéAPI
+    codigo = models.IntegerField()  # Pokédex code/id de PokéAPI
     imagemUrl = models.URLField(max_length=400)
     nome = models.CharField(max_length=100)
 
@@ -33,3 +34,21 @@ class PokemonUsuario(models.Model):
 
     def __str__(self):
         return f"{self.nome} (#{self.codigo}) - {self.usuario}"
+
+
+class PokemonCache(models.Model):
+    """Cache simples para dados normalizados de Pokémon.
+    Usado para reduzir chamadas à PokéAPI em listagens e buscas.
+    """
+    codigo = models.IntegerField(primary_key=True)
+    nome = models.CharField(max_length=100)
+    tipos = models.JSONField(default=list)
+    imagemUrl = models.URLField(max_length=400)
+    dtAtualizado = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Cache de Pokémon"
+        verbose_name_plural = "Cache de Pokémon"
+
+    def __str__(self):
+        return f"{self.nome} (#{self.codigo})"

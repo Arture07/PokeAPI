@@ -7,7 +7,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from django.contrib.auth import get_user_model
-from pokemon.views import sync_tipos
+from pokemon.views import sync_tipos, list_pokemon, get_pokemon, favorites_view, favorites_detail_view, team_view, team_detail_view
 
 
 def health_view(request):
@@ -57,6 +57,16 @@ urlpatterns = [
     path('auth/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('auth/me/', me_view, name='me'),
 
-    # pokemon (dev helper)
+    # pokemon (dev helper + listagem)
     path('pokemon/sync-types/', sync_tipos, name='pokemon_sync_types'),
+    path('pokemon/', list_pokemon, name='pokemon_list'),
+    path('pokemon/<int:codigo>/', get_pokemon, name='pokemon_detail'),
+
+    # favoritos
+    path('pokemon/favorites/', favorites_view, name='pokemon_favorites'),
+    path('pokemon/favorites/<int:codigo>/', favorites_detail_view, name='pokemon_favorites_detail'),
+
+    # equipe de batalha
+    path('pokemon/team/', team_view, name='pokemon_team'),
+    path('pokemon/team/<int:codigo>/', team_detail_view, name='pokemon_team_detail'),
 ]
