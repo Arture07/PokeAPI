@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 from dotenv import load_dotenv
+from datetime import timedelta
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 # Carregar variáveis do arquivo .env na raiz de backend/
@@ -100,10 +101,18 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.AllowAny',
     ],
+    # Throttling leve: protege públicos e autenticados de abuso
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.UserRateThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': '60/min',
+        'user': '120/min',
+    },
 }
 
 # Configuração básica do SimpleJWT (pode ser ajustada depois)
-from datetime import timedelta
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=30),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
@@ -111,3 +120,8 @@ SIMPLE_JWT = {
 }
 
 CORS_ALLOW_ALL_ORIGINS = True
+
+# Limites e defaults de paginação/filtros (consumidos nas views)
+DEFAULT_POKEMON_LIMIT = int(os.getenv('DEFAULT_POKEMON_LIMIT', '20'))
+MAX_POKEMON_LIMIT = int(os.getenv('MAX_POKEMON_LIMIT', '100'))
+POKEAPI_BASE = os.getenv('POKEAPI_BASE', 'https://pokeapi.co/api/v2')

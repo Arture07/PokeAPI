@@ -1,150 +1,184 @@
-# Kogui PokeAPI – Desafio
+# PokeAPI – Backend Django + DRF
 
-Projeto full-stack para Pokédex com favoritos e equipe de batalha.
+API em Django/DRF que integra com a PokéAPI, com autenticação JWT, listagem/detalhe de Pokémon, favoritos e equipe de batalha (máx 6). Inclui testes e containerização.
 
-## Stack (decisão)
-- Back-end: Django + Django REST Framework, JWT (simplejwt), SQLite, requests, CORS.
-- Front-end: Angular + Angular Material.
+## Sumário
+- Visão geral e arquitetura
+- Variáveis de ambiente
+- Como executar (local e Docker Compose)
+- Uso da API (endpoints e exemplos)
+- Testes
+- Solução de problemas (Windows/volumes/migrações)
+- Notas de produção e próximos passos
 
-Por que Django/DRF (vs Flask):
-- Autenticação JWT madura (simplejwt) e permissões nativas do DRF.
-- ORM e migrações rápidas; Django Admin ajuda na gestão de dados.
-- DRF oferece paginação, filtros e viewsets prontos.
-- Centraliza a integração com a PokéAPI com menos "cola" entre libs.
+## Visão geral e arquitetura
+- Stack: Django 5, DRF, SimpleJWT, requests, SQLite, CORS.
+- Apps:
+  - `core`: usuário customizado (`Usuario`) com `login` como USERNAME_FIELD.
+  - `pokemon`: modelos, serviços de integração, views, admin, tests e comando de management.
+- Integração com PokéAPI com retries/backoff e cache local (`PokemonCache`) com TTL.
+- Regras de negócio: favoritos por usuário e equipe de batalha com máximo de 6.
+- Throttling padrão no DRF (anon 60/min, user 120/min).
 
-Quando Flask seria melhor: microserviços minimalistas ou quando você já tem boilerplate pronto.
+## Variáveis de ambiente (arquivo `backend/.env`)
+Obrigatórias em dev:
+- DEBUG=1
+- ALLOWED_HOSTS=*
+- DJANGO_SECRET_KEY=change-me-in-prod
 
-## Estrutura
+Opcionais:
+- DEFAULT_POKEMON_LIMIT=20
+- MAX_POKEMON_LIMIT=100
+- POKEAPI_BASE=https://pokeapi.co/api/v2
+- POKEAPI_VERIFY_SSL=1  (use 0 se houver problemas de SSL na sua rede)
+- POKEMON_CACHE_TTL_SECONDS=86400 (24h)
+
+## Como executar
+### Docker Compose (recomendado)
+- Subir o serviço:
+```powershell
+docker compose up -d --build
 ```
-backend/        # API Django (DRF)
-frontend/       # App Angular (em etapas futuras)
+- Verificar saúde:
+```powershell
+curl http://localhost:8000/health/
 ```
+- Logs (opcional):
+```powershell
+docker compose logs -f backend
+```
+Notas Windows:
+- Por padrão, o Compose NÃO monta o `db.sqlite3` do host, evitando conflitos de migração/locks. O banco fica dentro do container.
+- Se quiser persistir localmente, veja a seção “Persistência do SQLite (opcional)”.
 
-## Como rodar (Windows PowerShell)
-1. Criar e ativar venv
-```
-python -m venv .venv
-. .\.venv\Scripts\Activate.ps1
-```
-2. Instalar dependências e migrar DB
-```
+### Execução local (sem Docker)
+1) (Opcional) Criar e ativar venv
+2) Instalar dependências:
+```powershell
 pip install -r backend/requirements.txt
+```
+3) Migrar e rodar:
+```powershell
 python backend/manage.py migrate
+python backend/manage.py runserver 0.0.0.0:8000
 ```
-3. Subir o servidor
+
+### Persistência do SQLite (opcional)
+Se quiser ter o `db.sqlite3` persistido no host com Compose:
+1) Pare o Compose: `docker compose down`
+2) Crie o arquivo do banco (se não existir):
+```powershell
+New-Item -ItemType File -Path .\backend\db.sqlite3 -Force | Out-Null
 ```
-python backend/manage.py runserver 8000
+3) Edite `docker-compose.yml` adicionando o volume no serviço backend:
 ```
-4. Health check
-- Acesse: http://127.0.0.1:8000/health/
-
-## Parte 1 (P1) — Backend com Usuário e JWT
-Status: concluído.
-
-Entregas da P1:
-- Projeto Django/DRF operacional com `/health`.
-- Modelo de usuário custom `core.Usuario` (login como USERNAME_FIELD) + admin.
-- Autenticação JWT (SimpleJWT) configurada.
-- Endpoints de autenticação e teste protegidos.
-
-Endpoints:
-- GET /health
-- POST /auth/register { login, email, password, nome }
-- POST /auth/login { login, password } -> { access, refresh }
-- POST /auth/refresh { refresh } -> { access }
-- GET /auth/me (Bearer access) -> dados do usuário
-
-Como verificar rapidamente (PowerShell):
-1) Criar usuário:
+    volumes:
+      - ./backend/db.sqlite3:/app/db.sqlite3
 ```
-$body = @{login='ash'; email='ash@example.com'; password='Poke@123'; nome='Ash Ketchum'} | ConvertTo-Json
-Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/auth/register/ -ContentType 'application/json' -Body $body
+4) Suba novamente: `docker compose up -d --build`
+
+Se aparecer “InconsistentMigrationHistory”, apague o arquivo `backend/db.sqlite3`, suba o Compose para aplicar migrações do zero, e depois use normalmente.
+
+## Uso da API (endpoints e exemplos)
+Base URL (local): `http://localhost:8000`
+
+### Saúde
+- GET `/health/` → 200 {"status":"ok"}
+
+### Autenticação
+- POST `/auth/register/`
+  - body: `{ "login": "ash", "email": "ash@example.com", "password": "Aa@123456", "nome": "Ash" }`
+  - 201 com id/login/email/nome
+- POST `/auth/login/`
+  - body: `{ "login": "ash", "password": "Aa@123456" }`
+  - 200 `{ access, refresh }`
+- POST `/auth/refresh/` → 200 `{ access }`
+- GET `/auth/me/` (Bearer access)
+
+Exemplo (PowerShell):
+```powershell
+$login = Invoke-RestMethod -Method Post -Uri http://localhost:8000/auth/login/ -ContentType 'application/json' -Body '{"login":"ash","password":"Aa@123456"}'
+curl http://localhost:8000/auth/me/ -Headers @{ Authorization = "Bearer $($login.access)" }
 ```
-2) Obter tokens e chamar rota protegida:
-```
-$login = @{login='ash'; password='Poke@123'} | ConvertTo-Json
-$tokens = Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/auth/login/ -ContentType 'application/json' -Body $login
-$headers = @{ Authorization = ('Bearer ' + $tokens.access) }
-Invoke-RestMethod -Headers $headers -Method Get -Uri http://127.0.0.1:8000/auth/me/
-```
-3) Admin (opcional):
-- Crie um superuser: `python backend/manage.py createsuperuser`
-- Acesse: http://127.0.0.1:8000/admin/
 
-## Parte 2 (P2) — Domínio de Pokémon e cache
-Status: implementado (lista/detalhe + favoritos + equipe) e testes básicos com mock.
+### Pokémon (público)
+- GET `/pokemon/?generation=&name=&limit=&offset=&verify=0|1`
+  - Retorna `{ count, results }`. `limit` respeita MAX_POKEMON_LIMIT.
+- GET `/pokemon/<codigo>/`
+  - Retorna detalhe normalizado `{ codigo, nome, tipos[], imagemUrl }` (usa cache TTL).
 
-Novos modelos/serviços:
-- `pokemon.PokemonCache`: cache normalizado de Pokémon (nome, tipos, imagem, dtAtualizado) com TTL simples.
-- Serviços com sessão HTTP e Retry; flag de verificação TLS configurável; normalização de detalhe.
+### Favoritos (autenticado)
+- GET `/pokemon/favorites/`
+- POST `/pokemon/favorites/` body `{ "codigo": 25 }`
+- DELETE `/pokemon/favorites/25/`
 
-Novos endpoints públicos:
-- GET /pokemon/?generation=&name=&limit=&offset=&verify=  -> listagem com filtros e paginação simples.
-- GET /pokemon/<codigo>/?verify=                         -> detalhe por código.
+Respostas tipicamente retornam dados normalizados do Pokémon. Ao remover, 204 mesmo se já ausente.
 
-Endpoints autenticados (JWT Bearer):
-- GET /pokemon/favorites/                                -> lista favoritos do usuário.
-- POST /pokemon/favorites/ { codigo }                    -> adiciona/atualiza favorito.
-- DELETE /pokemon/favorites/<codigo>/                    -> remove favorito.
-- GET /pokemon/team/                                     -> lista equipe de batalha (máx. 6).
-- POST /pokemon/team/ { codigo }                         -> adiciona à equipe (enforce máx. 6).
-- DELETE /pokemon/team/<codigo>/                         -> remove da equipe.
+### Equipe de batalha (autenticado)
+- GET `/pokemon/team/`
+- POST `/pokemon/team/` body `{ "codigo": 6 }`
+- DELETE `/pokemon/team/6/`
+- Regra: máximo de 6 na equipe. Ao tentar adicionar o 7º, retorna 400 com mensagem.
 
-Notas de implementação:
-- FK `PokemonUsuario.idTipoPokemon` é opcional (null/blank) para não travar o fluxo se tipos não estiverem seedados.
-- Endpoint dev de seed: POST /pokemon/sync-types/?verify=0|1 (use apenas em dev; para prod, use o comando de management: `python backend/manage.py sync_pokemon_types`).
+### Utilidades e dev
+- POST `/pokemon/sync-types/` (apenas quando `DEBUG=1`) → popula `TipoPokemon` a partir da PokéAPI.
+- GET `/admin/users/` (apenas staff) → lista simples de usuários.
+- POST `/auth/reset-password/` → gera token de reset (dev-friendly, sem e-mail)
+- POST `/auth/reset-password/confirm/` → aplica nova senha com `{ login, token, new_password }`
 
-### Variáveis de ambiente
-Crie `backend/.env` (carregado no settings):
-- `DJANGO_SECRET_KEY` — chave secreta (trocar em prod).
-- `DEBUG=1|0`
-- `ALLOWED_HOSTS=*` (ou lista separada por vírgula)
-- `POKEAPI_VERIFY_SSL=1|0` — verificação TLS nas chamadas à PokéAPI (mantenha 1 em produção; 0 só para redes corporativas com inspeção).
-- `POKEMON_CACHE_TTL_SECONDS=86400` — TTL do cache de Pokémon (padrão 24h).
-
-### Testes
-- Testes unitários básicos com mocks para não depender da PokéAPI.
-```
+## Testes
+Executar testes do app `pokemon`:
+```powershell
 python backend/manage.py test pokemon -v 2
 ```
 
-### Verificação rápida dos novos endpoints (PowerShell)
-Assumindo `$headers` já definido com Bearer acima:
-```
-# Listagem pública (primeiros itens)
-Invoke-RestMethod -Method Get -Uri "http://127.0.0.1:8000/pokemon/?limit=5&offset=0"
+## Solução de problemas
+- PowerShell + caminhos Windows
+  - Em comandos `docker run`, prefira `--mount` com `source="$($pwd.Path)\backend\db.sqlite3"`.
+  - Arquivo precisa existir antes para bind de arquivo.
+  - Habilite File Sharing do drive C: no Docker Desktop.
+- “InconsistentMigrationHistory” ao usar volume do SQLite
+  - Pare containers, apague `backend/db.sqlite3`, suba novamente para migrar do zero.
+- Porta 8000 em uso
+  - Ajuste o mapeamento no compose para `- "8001:8000"` e acesse `http://localhost:8001`.
+- Name conflict do container
+  - `docker stop pokeapi-backend` antes de subir de novo com mesmo nome.
+- SSL/Firewall corporativo com PokéAPI
+  - Tente `POKEAPI_VERIFY_SSL=0` no `.env` (ou `verify=0` nos endpoints públicos) apenas em dev.
 
-# Detalhe público
-Invoke-RestMethod -Method Get -Uri "http://127.0.0.1:8000/pokemon/1/"
+## Notas de produção
+- Defina `DEBUG=0`, `ALLOWED_HOSTS` e um `DJANGO_SECRET_KEY` forte.
+- Considere usar Postgres no lugar de SQLite.
+- Ajuste throttling conforme necessidade de tráfego.
+- Parametrize TTL de cache de Pokémon via `POKEMON_CACHE_TTL_SECONDS`.
+- CORS: restringir domínios permitidos.
 
-# Favoritar (autenticado)
-Invoke-RestMethod -Headers $headers -Method Post -Uri "http://127.0.0.1:8000/pokemon/favorites/" -ContentType 'application/json' -Body (@{codigo=25} | ConvertTo-Json)
-Invoke-RestMethod -Headers $headers -Method Get -Uri "http://127.0.0.1:8000/pokemon/favorites/"
-Invoke-RestMethod -Headers $headers -Method Delete -Uri "http://127.0.0.1:8000/pokemon/favorites/25/"
+## Próximos passos (P3 – Frontend Angular)
+- Bootstrap do front: Angular + Material, AuthInterceptor/Guard, serviço de API e tela de Login.
+- Telas: Listagem (filtros por geração/nome, cards com tipos, ações Favorito/Equipe), Favoritos e Equipe (máx 6).
+- Integração com endpoints já prontos e tratamento de erros/paginação.
 
-# Equipe (autenticado; máx 6)
-1..6 | ForEach-Object { Invoke-RestMethod -Headers $headers -Method Post -Uri "http://127.0.0.1:8000/pokemon/team/" -ContentType 'application/json' -Body (@{codigo=$_} | ConvertTo-Json) }
-Invoke-RestMethod -Headers $headers -Method Get -Uri "http://127.0.0.1:8000/pokemon/team/"
-Invoke-RestMethod -Headers $headers -Method Delete -Uri "http://127.0.0.1:8000/pokemon/team/3/"
-```
+---
 
-### O que é site-packages?
-- Pasta dentro do virtualenv (`.venv/Lib/site-packages`) onde ficam bibliotecas de terceiros (ex.: Django, DRF, requests). Não faz parte do repositório; não edite arquivos lá.
+## Roadmap por partes (P1, P2, P3)
 
-### Dica Git – "Author identity unknown"
-Configure uma identidade:
-```
-# global
-git config --global user.name "Seu Nome"
-git config --global user.email "seu-email@exemplo.com"
-# ou somente neste repo
-# git config user.name "Seu Nome"
-# git config user.email "seu-email@exemplo.com"
-```
+- P1 – Fundamentos do backend [CONCLUÍDO]
+  - Projeto Django + DRF, health check `/health/`.
+  - Usuário customizado (`core.Usuario`) e autenticação JWT (register/login/refresh/me).
+  - Admin habilitado e CORS/configs essenciais.
 
-## Próximas melhorias (roadmap)
-- Reduzir chamadas externas na listagem (batching/concurrency) e pré-preenchimento de cache em background.
-- Remover endpoint dev `/pokemon/sync-types/` em produção (usar apenas management command).
-- Paginação DRF padrão e filtros avançados (django-filter).
-- Melhorar manuseio de TLS corporativo (cert store/CA customizada em vez de `verify=False`).
-- Front-end Angular (login, listagem, favoritos, equipe).
+- P2 – Domínio Pokémon e regras [CONCLUÍDO]
+  - Modelagem: `TipoPokemon`, `PokemonUsuario`, `PokemonCache`.
+  - Integração PokéAPI: retries/backoff, verify SSL configurável, normalização.
+  - Endpoints: listagem/filtragem, detalhe, favoritos (CRUD), equipe de batalha (máx 6), sync de tipos (DEBUG).
+  - Diferenciais: throttling leve, endpoints auxiliares (lista de usuários admin e fluxo dev de reset de senha), testes.
+
+- P3 – Frontend Angular [EM ANDAMENTO]
+  - Bootstrap do front, autenticação (Interceptor/Guard), tela de Login.
+  - Telas de Listagem/Favoritos/Equipe integradas ao backend.
+  - UX: paginação/infinite scroll, feedbacks de regra de 6.
+
+- Opcionais/Futuros
+  - Persistência do SQLite via volume com procedimento seguro.
+  - Postgres para produção, CI, métricas, e2e no front, fluxo completo de reset por e-mail.
+

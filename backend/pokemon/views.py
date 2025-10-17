@@ -1,13 +1,12 @@
-from django.shortcuts import render
 from typing import List
-import requests
-from django.db import transaction
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework import status
 from .models import TipoPokemon, PokemonUsuario
 from .services import sync_types_from_pokeapi, list_by_generation_and_name, get_pokemon_detail
+from django.conf import settings
+from rest_framework import serializers
 
 POKEAPI_BASE = "https://pokeapi.co/api/v2"
 
@@ -15,6 +14,9 @@ POKEAPI_BASE = "https://pokeapi.co/api/v2"
 @api_view(["POST"])  # temporário: facilitar seed em dev
 @permission_classes([AllowAny])
 def sync_tipos(request):
+    # Gate por DEBUG para evitar uso em produção
+    if not settings.DEBUG:
+        return Response({"detail": "Rota desabilitada em produção"}, status=status.HTTP_404_NOT_FOUND)
     try:
         verify_param = request.query_params.get("verify")
         verify = None
@@ -26,21 +28,36 @@ def sync_tipos(request):
         return Response({"detail": f"Erro ao consultar PokéAPI: {exc}"}, status=status.HTTP_502_BAD_GATEWAY)
 
 
+class PokemonListQuery(serializers.Serializer):
+    generation = serializers.IntegerField(required=False, min_value=1)
+    name = serializers.CharField(required=False, allow_blank=True)
+    limit = serializers.IntegerField(required=False, min_value=1)
+    offset = serializers.IntegerField(required=False, min_value=0)
+    verify = serializers.ChoiceField(required=False, choices=["0", "1"])
+
+
 @api_view(["GET"])  # público para a listagem
 @permission_classes([AllowAny])
 def list_pokemon(request):
-    try:
-        generation = request.query_params.get("generation")
-        name = request.query_params.get("name")
-        limit = int(request.query_params.get("limit", 20))
-        offset = int(request.query_params.get("offset", 0))
-        verify = request.query_params.get("verify")
-        verify_flag = None
-        if verify in ("0", "1"):
-            verify_flag = verify == "1"
+    q = PokemonListQuery(data=request.query_params)
+    if not q.is_valid():
+        return Response(q.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        gen_int = int(generation) if generation is not None and generation != "" else None
-        total, results = list_by_generation_and_name(gen_int, name, limit, offset, verify_override=verify_flag)
+    data = q.validated_data
+    generation = data.get("generation")
+    name = data.get("name")
+    limit = data.get("limit", getattr(settings, 'DEFAULT_POKEMON_LIMIT', 20))
+    offset = data.get("offset", 0)
+    max_limit = getattr(settings, 'MAX_POKEMON_LIMIT', 100)
+    if limit > max_limit:
+        return Response({"detail": f"limit máximo é {max_limit}"}, status=status.HTTP_400_BAD_REQUEST)
+
+    verify_flag = None
+    if data.get("verify") in ("0", "1"):
+        verify_flag = data["verify"] == "1"
+
+    try:
+        total, results = list_by_generation_and_name(generation, name, limit, offset, verify_override=verify_flag)
         return Response({"count": total, "results": results})
     except Exception as exc:
         return Response({"detail": f"Erro ao listar Pokémon: {exc}"}, status=status.HTTP_502_BAD_GATEWAY)
@@ -61,6 +78,10 @@ def get_pokemon(request, codigo: int):
 
 
 # ---- Favoritos ----
+class CodigoBody(serializers.Serializer):
+    codigo = serializers.IntegerField(min_value=1)
+
+
 @api_view(["GET", "POST"])  # autenticado
 @permission_classes([IsAuthenticated])
 def favorites_view(request):
@@ -77,13 +98,10 @@ def favorites_view(request):
         return Response({"count": len(results), "results": results})
 
     # POST
-    codigo = request.data.get("codigo")
-    if not codigo:
-        return Response({"detail": "codigo é obrigatório"}, status=status.HTTP_400_BAD_REQUEST)
-    try:
-        codigo = int(codigo)
-    except Exception:
-        return Response({"detail": "codigo inválido"}, status=status.HTTP_400_BAD_REQUEST)
+    ser = CodigoBody(data=request.data)
+    if not ser.is_valid():
+        return Response(ser.errors, status=status.HTTP_400_BAD_REQUEST)
+    codigo = ser.validated_data["codigo"]
 
     try:
         det = get_pokemon_detail(codigo)
@@ -144,13 +162,10 @@ def team_view(request):
         return Response({"count": len(results), "results": results})
 
     # POST add
-    codigo = request.data.get("codigo")
-    if not codigo:
-        return Response({"detail": "codigo é obrigatório"}, status=status.HTTP_400_BAD_REQUEST)
-    try:
-        codigo = int(codigo)
-    except Exception:
-        return Response({"detail": "codigo inválido"}, status=status.HTTP_400_BAD_REQUEST)
+    ser = CodigoBody(data=request.data)
+    if not ser.is_valid():
+        return Response(ser.errors, status=status.HTTP_400_BAD_REQUEST)
+    codigo = ser.validated_data["codigo"]
 
     # enforce max 6
     atual = PokemonUsuario.objects.filter(usuario=user, grupoBatalha=True).count()

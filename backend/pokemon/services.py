@@ -7,8 +7,9 @@ from django.db import transaction
 from django.utils import timezone
 from datetime import timedelta
 from .models import TipoPokemon, PokemonCache
+from django.conf import settings
 
-POKEAPI_BASE = "https://pokeapi.co/api/v2"
+POKEAPI_BASE = getattr(settings, 'POKEAPI_BASE', 'https://pokeapi.co/api/v2')
 
 
 def _http_session() -> requests.Session:

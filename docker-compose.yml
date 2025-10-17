@@ -1,0 +1,17 @@
+version: "3.8"
+
+services:
+  backend:
+    container_name: pokeapi-backend
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: pokeapi-backend:latest
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./backend/.env
+    environment:
+      - DJANGO_SETTINGS_MODULE=pokeback.settings
+    restart: unless-stopped
+
