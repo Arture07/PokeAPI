@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.http import JsonResponse
-from django.urls import path
+from django.urls import path, include
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated, IsAdminUser
 from rest_framework.response import Response
@@ -98,8 +98,7 @@ def confirm_password_reset(request):
     return Response({"detail": "Senha redefinida com sucesso"})
 
 
-urlpatterns = [
-    path('admin/', admin.site.urls),
+api_urlpatterns = [
     path('health/', health_view, name='health'),
     # auth
     path('auth/register/', register_view, name='register'),
@@ -124,4 +123,12 @@ urlpatterns = [
     path('admin/users/', users_list_view, name='admin_users_list'),
     path('auth/reset-password/', request_password_reset_token, name='request_password_reset_token'),
     path('auth/reset-password/confirm/', confirm_password_reset, name='confirm_password_reset'),
+]
+
+urlpatterns = [
+    path('admin/', admin.site.urls),
+    # sem prefixo (retrocompatibilidade)
+    path('', include(api_urlpatterns)),
+    # com prefixo /api
+    path('api/', include((api_urlpatterns, 'api'), namespace='api')),
 ]

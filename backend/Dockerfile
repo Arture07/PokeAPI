@@ -24,7 +24,8 @@ COPY . /app
 
 # Entrypoint aplica migrações e sobe o servidor
 COPY docker-entrypoint.sh /app/docker-entrypoint.sh
-RUN chmod +x /app/docker-entrypoint.sh
+# Normalize line endings in case the file was checked out with CRLF on Windows
+RUN sed -i 's/\r$//' /app/docker-entrypoint.sh && chmod +x /app/docker-entrypoint.sh
 
 EXPOSE 8000
 
