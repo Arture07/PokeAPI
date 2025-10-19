@@ -2,9 +2,12 @@ import { HttpInterceptorFn } from '@angular/common/http';
 import { inject } from '@angular/core';
 import { AuthService } from './auth.service';
 import { environment } from '../../environments/environment';
+import { Router } from '@angular/router';
+import { catchError, throwError } from 'rxjs';
 
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
   const auth = inject(AuthService);
+  const router = inject(Router);
   const token = auth.accessToken;
 
   // Skip attaching Authorization for public endpoints to avoid 401 with stale/invalid tokens
@@ -26,5 +29,14 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
       }
     });
   }
-  return next(req);
+  return next(req).pipe(
+    catchError((err) => {
+      // Se 401 em rota protegida: limpar sessão e redirecionar ao login com aviso
+      if (err?.status === 401 && !isPublic) {
+        auth.logout();
+        try { router.navigate(['/login'], { queryParams: { expired: '1' } }); } catch {}
+      }
+      return throwError(() => err);
+    })
+  );
 };

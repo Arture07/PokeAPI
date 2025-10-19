@@ -1,7 +1,7 @@
 import { Component, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { AuthService } from '../../core/auth.service';
 
 @Component({
@@ -11,6 +11,7 @@ import { AuthService } from '../../core/auth.service';
   template: `
   <div class="login">
     <h1>Entrar</h1>
+    <p *ngIf="expired" style="color:#c00">Sua sessão expirou. Faça login novamente.</p>
     <form [formGroup]="form" (ngSubmit)="submit()">
       <label>Login</label>
       <input formControlName="login" required autocomplete="username" />
@@ -27,9 +28,11 @@ export class LoginComponent {
   private fb = inject(FormBuilder);
   private auth = inject(AuthService);
   private router = inject(Router);
+  private route = inject(ActivatedRoute);
 
   loading = false;
   error = '';
+  expired = false;
 
   form = this.fb.group({
     login: ['', Validators.required],
@@ -54,5 +57,9 @@ export class LoginComponent {
         this.loading = false;
       }
     });
+  }
+
+  ngOnInit() {
+    this.expired = this.route.snapshot.queryParamMap.get('expired') === '1';
   }
 }

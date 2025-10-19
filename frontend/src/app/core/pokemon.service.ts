@@ -1,6 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { environment } from '../../environments/environment';
+import { BehaviorSubject } from 'rxjs';
 
 export interface PokemonItem {
   codigo: number;
@@ -17,6 +18,12 @@ export interface Paginated<T> {
 @Injectable({ providedIn: 'root' })
 export class PokemonService {
   private http = inject(HttpClient);
+  // Contador reativo da equipe para mostrar no topo
+  private teamCountSubject = new BehaviorSubject<number>(0);
+  teamCount$ = this.teamCountSubject.asObservable();
+  updateTeamCount(count: number) {
+    this.teamCountSubject.next(Math.max(0, Math.min(6, count)));
+  }
 
   list(params: { generation?: number; name?: string; limit?: number; offset?: number } = {}) {
     let p = new HttpParams();
@@ -25,6 +32,11 @@ export class PokemonService {
     if (params.limit != null) p = p.set('limit', params.limit);
     if (params.offset != null) p = p.set('offset', params.offset);
     return this.http.get<Paginated<PokemonItem>>(`${environment.apiBaseUrl}/pokemon/`, { params: p });
+  }
+
+  // Detalhe de um pokémon (para obter tipos e garantir imagem)
+  get(codigo: number) {
+    return this.http.get<PokemonItem>(`${environment.apiBaseUrl}/pokemon/${codigo}/`);
   }
 
   // Favoritos
