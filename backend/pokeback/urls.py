@@ -55,7 +55,52 @@ def register_view(request):
 @permission_classes([IsAuthenticated])
 def me_view(request):
     user = request.user
-    return Response({"id": user.id, "login": user.login, "email": user.email, "nome": user.nome})
+    return Response({
+        "id": user.id,
+        "login": user.login,
+        "email": user.email,
+        "nome": user.nome,
+        "is_staff": bool(getattr(user, 'is_staff', False)),
+        "is_superuser": bool(getattr(user, 'is_superuser', False)),
+        "is_active": bool(getattr(user, 'is_active', True)),
+    })
+
+
+@api_view(["PATCH"])  # atualiza nome/email do próprio usuário
+@permission_classes([IsAuthenticated])
+def me_update_view(request):
+    user = request.user
+    data = request.data or {}
+    nome = data.get("nome")
+    email = data.get("email")
+    updates = []
+    if nome is not None:
+        user.nome = str(nome)
+        updates.append('nome')
+    if email is not None:
+        user.email = str(email)
+        updates.append('email')
+    if updates:
+        user.save(update_fields=updates)
+    return Response({"detail": "Atualizado", "updated": updates})
+
+
+@api_view(["POST"])  # troca de senha do próprio usuário
+@permission_classes([IsAuthenticated])
+def change_password_view(request):
+    user = request.user
+    data = request.data or {}
+    current = data.get('current_password')
+    new = data.get('new_password')
+    if not current or not new:
+        return Response({"detail": "current_password e new_password são obrigatórios"}, status=status.HTTP_400_BAD_REQUEST)
+    if not user.check_password(current):
+        return Response({"detail": "Senha atual inválida"}, status=status.HTTP_400_BAD_REQUEST)
+    if len(str(new)) < 8:
+        return Response({"detail": "Nova senha muito curta (mín. 8)"}, status=status.HTTP_400_BAD_REQUEST)
+    user.set_password(str(new))
+    user.save(update_fields=['password'])
+    return Response({"detail": "Senha alterada"})
 
 
 @api_view(["GET"])  # lista simples de usuários (apenas staff)
@@ -66,6 +111,51 @@ def users_list_view(request):
         {"id": u.id, "login": u.login, "email": u.email, "nome": u.nome, "is_active": u.is_active}
         for u in qs
     ])
+
+
+@api_view(["PATCH", "GET"])  # detalhe e atualização simples de usuário (apenas staff)
+@permission_classes([IsAdminUser])
+def users_detail_view(request, user_id: int):
+    u = User.objects.filter(id=user_id).first()
+    if not u:
+        return Response({"detail": "Usuário não encontrado"}, status=status.HTTP_404_NOT_FOUND)
+    if request.method == "GET":
+        return Response({
+            "id": u.id, "login": u.login, "email": u.email, "nome": u.nome,
+            "is_active": u.is_active, "is_staff": u.is_staff, "is_superuser": u.is_superuser
+        })
+    data = request.data or {}
+    # Permitimos atualização de nome, email e is_active
+    nome = data.get("nome")
+    email = data.get("email")
+    is_active = data.get("is_active")
+    updates = []
+    if nome is not None:
+        u.nome = str(nome)
+        updates.append('nome')
+    if email is not None:
+        u.email = str(email)
+        updates.append('email')
+    if is_active is not None:
+        u.is_active = bool(is_active)
+        updates.append('is_active')
+    if updates:
+        u.save(update_fields=updates)
+    return Response({"detail": "Atualizado", "updated": updates})
+
+
+@api_view(["POST"])  # reset de senha administrativo (apenas staff)
+@permission_classes([IsAdminUser])
+def admin_reset_user_password(request, user_id: int):
+    u = User.objects.filter(id=user_id).first()
+    if not u:
+        return Response({"detail": "Usuário não encontrado"}, status=status.HTTP_404_NOT_FOUND)
+    new_password = (request.data or {}).get('new_password')
+    if not new_password or len(str(new_password)) < 8:
+        return Response({"detail": "new_password é obrigatório (mín. 8 caracteres)"}, status=status.HTTP_400_BAD_REQUEST)
+    u.set_password(str(new_password))
+    u.save(update_fields=['password'])
+    return Response({"detail": "Senha redefinida"})
 
 
 @api_view(["POST"])  # inicia reset emitindo token (dev)
@@ -106,6 +196,8 @@ api_urlpatterns = [
     path('auth/login/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('auth/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('auth/me/', me_view, name='me'),
+    path('auth/me/update/', me_update_view, name='me_update'),
+    path('auth/change-password/', change_password_view, name='change_password'),
 
     # pokemon (dev helper + listagem)
     path('pokemon/sync-types/', sync_tipos, name='pokemon_sync_types'),
@@ -123,6 +215,8 @@ api_urlpatterns = [
 
     # Diferenciais: gestão simples de usuários e reset de senha (fluxo dev-friendly)
     path('admin/users/', users_list_view, name='admin_users_list'),
+    path('admin/users/<int:user_id>/', users_detail_view, name='admin_users_detail'),
+    path('admin/users/<int:user_id>/reset-password/', admin_reset_user_password, name='admin_users_reset_password'),
     path('auth/reset-password/', request_password_reset_token, name='request_password_reset_token'),
     path('auth/reset-password/confirm/', confirm_password_reset, name='confirm_password_reset'),
 ]

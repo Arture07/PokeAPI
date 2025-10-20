@@ -1,6 +1,6 @@
 import { Component, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { ActivatedRoute, RouterModule } from '@angular/router';
+import { ActivatedRoute, Router, RouterModule } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
 import { MatCardModule } from '@angular/material/card';
 import { MatChipsModule } from '@angular/material/chips';
@@ -8,7 +8,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatTabsModule } from '@angular/material/tabs';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { environment } from '../../../environments/environment';
+import { getApiBaseUrl } from '../../core/api.config';
 
 interface PokemonDetail {
   codigo: number;
@@ -23,12 +23,28 @@ interface PokemonDetail {
   categoria?: string;
   genero?: { maleRate: number; femaleRate: number; genderless: boolean };
   stats?: { hp: number; attack: number; defense: number; spAttack: number; spDefense: number; speed: number; total?: number };
-  habilidades?: Array<{ nome: string; efeito?: string }>;
+  habilidades?: Array<{ nome: string; efeito?: string; isHidden?: boolean }>;
   efetividades?: {
     defesa?: { [key: string]: number };
     ataque?: { [key: string]: number };
   };
-  evolucoes?: Array<{ codigo: number; nome: string; imagemUrl: string; trigger?: string; minimo?: number; item?: string; heldItem?: string; tipo?: string; genero?: string }>;
+  evolucoes?: Array<{
+    codigo: number;
+    nome: string;
+    imagemUrl: string;
+    trigger?: string;
+    minLevel?: number | null;
+    item?: string | null;
+    heldItem?: string | null;
+    timeOfDay?: string | null;
+    knownMoveType?: string | null;
+    knownMove?: string | null;
+    location?: string | null;
+    minHappiness?: number | null;
+    needsRain?: boolean | null;
+    gender?: number | null;
+    detalhes?: any;
+  }>;
 }
 
 @Component({
@@ -63,7 +79,8 @@ interface PokemonDetail {
           </div>
           <div class="type-chips">
             <mat-chip *ngFor="let t of d.tipos" [ngStyle]="{ 'background-color': typeColor(t), color: '#fff' }">
-              {{ typeIcon(t) }} {{ typeLabel(t) }}
+              <img class="type-icon-img" [src]="typeIconUrl(t)" [alt]="typeLabel(t)" (error)="onTypeIconError($event, t)" />
+              {{ typeLabel(t) }}
             </mat-chip>
           </div>
         </div>
@@ -104,29 +121,69 @@ interface PokemonDetail {
           <mat-card-title>Habilidades</mat-card-title>
           <mat-card-content>
             <div class="hab" *ngFor="let h of d.habilidades">
-              <div class="hab-nome">{{ traduzHabilidade(h.nome) }}</div>
+              <div class="hab-nome">{{ traduzHabilidade(h.nome) }} <small *ngIf="h.isHidden" style="color:#888">(Oculta)</small></div>
               <div class="hab-efeito" *ngIf="h.efeito">{{ traduzEfeito(h.efeito) }}</div>
             </div>
           </mat-card-content>
         </mat-card>
 
-        <mat-card *ngIf="d.efetividades">
+        <mat-card *ngIf="d.efetividades as eff">
           <mat-card-title>Efetividades</mat-card-title>
           <mat-card-content>
             <mat-tab-group>
               <mat-tab label="Defesa">
-                <div class="eff-grid" *ngIf="d.efetividades?.defesa as def">
-                  <div class="eff" *ngFor="let t of typeKeys(def)" [matTooltip]="typeLabel(t)">
-                    <span class="eff-type">{{ typeIcon(t) }} {{ typeLabel(t) }}</span>
-                    <span class="eff-val">x{{ def[t] | number: '1.0-1' }}</span>
+                <div class="eff-section" *ngIf="splitDef(eff.defesa) as se">
+                  <div class="eff-row" *ngIf="se.muitoFraco.length">
+                    <div class="eff-head">Fraquezas 4×</div>
+                    <div class="eff-tags">
+                      <span class="tag" *ngFor="let t of se.muitoFraco" [ngStyle]="{'background-color': typeColor(t)}"><img class="type-icon-img" [src]="typeIconUrl(t)" [alt]="typeLabel(t)" (error)="onTypeIconError($event, t)" /> {{ typeLabel(t) }}</span>
+                    </div>
+                  </div>
+                  <div class="eff-row" *ngIf="se.fraco.length">
+                    <div class="eff-head">Fraquezas 2×</div>
+                    <div class="eff-tags">
+                      <span class="tag" *ngFor="let t of se.fraco" [ngStyle]="{'background-color': typeColor(t)}"><img class="type-icon-img" [src]="typeIconUrl(t)" [alt]="typeLabel(t)" (error)="onTypeIconError($event, t)" /> {{ typeLabel(t) }}</span>
+                    </div>
+                  </div>
+                  <div class="eff-row" *ngIf="se.resistente.length">
+                    <div class="eff-head">Resistências 1/2×</div>
+                    <div class="eff-tags">
+                      <span class="tag" *ngFor="let t of se.resistente" [ngStyle]="{'background-color': typeColor(t)}"><img class="type-icon-img" [src]="typeIconUrl(t)" [alt]="typeLabel(t)" (error)="onTypeIconError($event, t)" /> {{ typeLabel(t) }}</span>
+                    </div>
+                  </div>
+                  <div class="eff-row" *ngIf="se.muitoResistente.length">
+                    <div class="eff-head">Resistências 1/4×</div>
+                    <div class="eff-tags">
+                      <span class="tag" *ngFor="let t of se.muitoResistente" [ngStyle]="{'background-color': typeColor(t)}"><img class="type-icon-img" [src]="typeIconUrl(t)" [alt]="typeLabel(t)" (error)="onTypeIconError($event, t)" /> {{ typeLabel(t) }}</span>
+                    </div>
+                  </div>
+                  <div class="eff-row" *ngIf="se.imune.length">
+                    <div class="eff-head">Imunidades 0×</div>
+                    <div class="eff-tags">
+                      <span class="tag" *ngFor="let t of se.imune" [ngStyle]="{'background-color': typeColor(t)}"><img class="type-icon-img" [src]="typeIconUrl(t)" [alt]="typeLabel(t)" (error)="onTypeIconError($event, t)" /> {{ typeLabel(t) }}</span>
+                    </div>
                   </div>
                 </div>
               </mat-tab>
               <mat-tab label="Ataque">
-                <div class="eff-grid" *ngIf="d.efetividades?.ataque as atk">
-                  <div class="eff" *ngFor="let t of typeKeys(atk)" [matTooltip]="typeLabel(t)">
-                    <span class="eff-type">{{ typeIcon(t) }} {{ typeLabel(t) }}</span>
-                    <span class="eff-val">x{{ atk[t] | number: '1.0-1' }}</span>
+                <div class="eff-section" *ngIf="splitAtk(eff.ataque) as se">
+                  <div class="eff-row" *ngIf="se.forte.length">
+                    <div class="eff-head">Fortes 2×</div>
+                    <div class="eff-tags">
+                      <span class="tag" *ngFor="let t of se.forte" [ngStyle]="{'background-color': typeColor(t)}"><img class="type-icon-img" [src]="typeIconUrl(t)" [alt]="typeLabel(t)" (error)="onTypeIconError($event, t)" /> {{ typeLabel(t) }}</span>
+                    </div>
+                  </div>
+                  <div class="eff-row" *ngIf="se.fraco.length">
+                    <div class="eff-head">Fracos 1/2×</div>
+                    <div class="eff-tags">
+                      <span class="tag" *ngFor="let t of se.fraco" [ngStyle]="{'background-color': typeColor(t)}"><img class="type-icon-img" [src]="typeIconUrl(t)" [alt]="typeLabel(t)" (error)="onTypeIconError($event, t)" /> {{ typeLabel(t) }}</span>
+                    </div>
+                  </div>
+                  <div class="eff-row" *ngIf="se.semEfeito.length">
+                    <div class="eff-head">Sem efeito 0×</div>
+                    <div class="eff-tags">
+                      <span class="tag" *ngFor="let t of se.semEfeito" [ngStyle]="{'background-color': typeColor(t)}"><img class="type-icon-img" [src]="typeIconUrl(t)" [alt]="typeLabel(t)" (error)="onTypeIconError($event, t)" /> {{ typeLabel(t) }}</span>
+                    </div>
                   </div>
                 </div>
               </mat-tab>
@@ -138,11 +195,11 @@ interface PokemonDetail {
           <mat-card-title>Evoluções</mat-card-title>
           <mat-card-content>
             <div class="evo-list">
-              <div class="evo" *ngFor="let e of d.evolucoes">
+              <div class="evo" *ngFor="let e of d.evolucoes" (click)="goTo(e.codigo)" tabindex="0" role="button">
                 <img [src]="e.imagemUrl" [alt]="e.nome" />
                 <div class="evo-info">
                   <div class="evo-nome">{{ e.nome }}</div>
-                  <div class="evo-trigger" *ngIf="e.trigger">{{ traduzTrigger(e) }}</div>
+                  <div class="evo-trigger" *ngIf="e.trigger" [innerHTML]="traduzTrigger(e)"></div>
                 </div>
               </div>
             </div>
@@ -166,24 +223,38 @@ interface PokemonDetail {
     .stat-label { font-weight: 600; margin-bottom: 2px; }
     .hab { margin: 8px 0; }
     .evo-list { display: flex; gap: 12px; flex-wrap: wrap; }
-    .evo { display: flex; gap: 8px; align-items: center; border: 1px solid #eee; border-radius: 8px; padding: 6px 8px; }
+    .evo { display: flex; gap: 8px; align-items: center; border: 1px solid #eee; border-radius: 8px; padding: 6px 8px; cursor: pointer; }
     .evo img { width: 56px; height: 56px; object-fit: contain; }
     .eff-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 8px; }
     .eff { display: flex; justify-content: space-between; border: 1px solid #eee; border-radius: 6px; padding: 6px 8px; }
+  .type-icon{margin-right:4px}
+  .type-icon-img{width:16px;height:16px;object-fit:contain;margin-right:4px;vertical-align:middle;display:inline-block}
+    .eff-section{display:flex;flex-direction:column;gap:8px}
+    .eff-row{display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap}
+    .eff-head{min-width:160px;font-weight:600;color:#444}
+    .eff-tags{display:flex;gap:6px;flex-wrap:wrap}
+    .tag{color:#fff;border-radius:12px;padding:2px 8px;display:inline-flex;align-items:center;gap:4px;font-size:12px}
     `,
   ],
 })
 export class PokemonDetailComponent {
   private route = inject(ActivatedRoute);
   private http = inject(HttpClient);
+  private router = inject(Router);
 
   data: PokemonDetail | null = null;
   statOrder: Array<keyof NonNullable<PokemonDetail['stats']>> = ['hp','attack','defense','spAttack','spDefense','speed'];
 
   ngOnInit() {
-    const codigo = Number(this.route.snapshot.paramMap.get('codigo'));
-    if (!codigo) return;
-    const url = `${environment.apiBaseUrl}/pokemon/${codigo}/full/`;
+    this.route.paramMap.subscribe(pm => {
+      const codigo = Number(pm.get('codigo'));
+      if (codigo) this.load(codigo);
+    });
+  }
+
+  private load(codigo: number) {
+    const base = getApiBaseUrl();
+    const url = `${base}/pokemon/${codigo}/full/`;
     this.http.get<PokemonDetail>(url).subscribe({
       next: (res) => this.data = this.normalize(res),
       error: () => this.data = null,
@@ -212,7 +283,28 @@ export class PokemonDetailComponent {
     const map: any = { normal:'Normal', fire:'Fogo', water:'Água', electric:'Elétrico', grass:'Planta', ice:'Gelo', fighting:'Lutador', poison:'Venenoso', ground:'Terrestre', flying:'Voador', psychic:'Psíquico', bug:'Inseto', rock:'Pedra', ghost:'Fantasma', dragon:'Dragão', dark:'Sombrio', steel:'Aço', fairy:'Fada' };
     return map[t?.toLowerCase?.()] || t;
   }
-  typeIcon(_t: string) { return '●'; }
+  typeIcon(t: string) {
+    const map: any = { normal:'●', fire:'🔥', water:'💧', electric:'⚡', grass:'🌿', ice:'❄️', fighting:'🥊', poison:'☠️', ground:'⛰️', flying:'🕊️', psychic:'🔮', bug:'🐛', rock:'🪨', ghost:'👻', dragon:'🐉', dark:'🌑', steel:'⚙️', fairy:'✨' };
+    return map[t?.toLowerCase?.()] || '●';
+  }
+
+  typeIconUrl(t: string) {
+    const n = (t || '').toLowerCase();
+    const valid = new Set(['normal','fire','water','electric','grass','ice','fighting','poison','ground','flying','psychic','bug','rock','ghost','dragon','dark','steel','fairy']);
+    // Conjunto open-source amplamente usado (estilo oficial)
+    return valid.has(n)
+      ? `https://raw.githubusercontent.com/duiker101/pokemon-type-svg-icons/master/icons/${n}.svg`
+      : '/assets/types/unknown.svg';
+  }
+
+  onTypeIconError(ev: Event, t: string) {
+    const img = ev.target as HTMLImageElement;
+    // Evita loop infinito
+    if ((img as any)._triedFallback) return;
+    (img as any)._triedFallback = true;
+    // Fallback local
+    img.src = '/assets/types/unknown.svg';
+  }
 
   statLabel(k: string) {
     const map: any = { hp:'HP', attack:'Ataque', defense:'Defesa', spAttack:'Atk Esp', spDefense:'Def Esp', speed:'Velocidade' };
@@ -230,12 +322,97 @@ export class PokemonDetailComponent {
 
   typeKeys(obj: { [k: string]: number }) { return Object.keys(obj); }
 
-  traduzTrigger(e: { trigger?: string; minimo?: number | null; item?: string | null; heldItem?: string | null; tipo?: string | null; genero?: string | null }) {
-    if (!e.trigger) return '';
-    const base = e.trigger;
-    if (base === 'level-up' && e.minimo != null) return `Sobe de nível (nível ${e.minimo})`;
-    if (base === 'use-item' && e.item) return `Usa item (${e.item})`;
-    if (base === 'trade' && e.heldItem) return `Troca segurando (${e.heldItem})`;
-    return base;
+  // --- Efetividades ---
+  splitDef(map: { [k: string]: number } = {}) {
+    const muitoFraco: string[] = []; // 4x
+    const fraco: string[] = [];      // 2x
+    const resistente: string[] = []; // 0.5x
+    const muitoResistente: string[] = []; // 0.25x
+    const imune: string[] = [];      // 0x
+    for (const [k,v] of Object.entries(map)) {
+      const val = Number(v||1);
+      if (val >= 4) muitoFraco.push(k);
+      else if (val >= 2) fraco.push(k);
+      else if (val === 0) imune.push(k);
+      else if (val <= 0.25) muitoResistente.push(k);
+      else if (val <= 0.5) resistente.push(k);
+    }
+    const byName = (a:string,b:string)=>this.typeLabel(a).localeCompare(this.typeLabel(b));
+    [muitoFraco, fraco, resistente, muitoResistente, imune].forEach(arr=>arr.sort(byName));
+    return { muitoFraco, fraco, resistente, muitoResistente, imune };
+  }
+  splitAtk(map: { [k: string]: number } = {}) {
+    const forte: string[] = []; // 2x
+    const fraco: string[] = []; // 0.5x
+    const semEfeito: string[] = []; // 0
+    for (const [k,v] of Object.entries(map)) {
+      const val = Number(v||1);
+      if (val >= 2) forte.push(k);
+      else if (val === 0) semEfeito.push(k);
+      else if (val <= 0.5) fraco.push(k);
+    }
+    const byName = (a:string,b:string)=>this.typeLabel(a).localeCompare(this.typeLabel(b));
+    ;[forte, fraco, semEfeito].forEach(arr=>arr.sort(byName));
+    return { forte, fraco, semEfeito };
+  }
+
+  // --- Evoluções / Triggers ---
+  private evoItemPT(item?: string | null) {
+    if (!item) return '';
+    const k = (item||'').toLowerCase();
+    const dict: any = {
+      'fire-stone':'Pedra Fogo','water-stone':'Pedra Água','thunder-stone':'Pedra Trovão','leaf-stone':'Pedra Folha','ice-stone':'Pedra Gelo','dusk-stone':'Pedra Noite','dawn-stone':'Pedra Alvorada','shiny-stone':'Pedra Brilhante','moon-stone':'Pedra da Lua','sun-stone':'Pedra do Sol',
+      'metal-coat':'Revestimento Metálico','king\'s-rock':'Rocha do Rei','upgrade':'Melhorador','dubious-disc':'Disco Duvidoso','oval-stone':'Pedra Oval','razor-claw':'Garra Navalha','razor-fang':'Presa Navalha'
+    };
+    return dict[k] || item.replace(/-/g,' ');
+  }
+  private evoLocationPT(loc?: string | null) {
+    if (!loc) return '';
+    const k = (loc||'').toLowerCase();
+    const dict: any = { 'eterna-forest':'Floresta Eterna', 'sinnoh-route-217':'Rota 217 (Sinnoh)' };
+    return dict[k] || loc.replace(/-/g,' ');
+  }
+  traduzTrigger(e: { trigger?: string; minLevel?: number | null; item?: string | null; heldItem?: string | null; timeOfDay?: string | null; knownMoveType?: string | null; knownMove?: string | null; location?: string | null; minHappiness?: number | null; needsRain?: boolean | null; gender?: number | null; detalhes?: any; }) {
+    if (!e?.trigger) return '';
+    const T = e.trigger;
+    const det: any = (e as any).detalhes || e;
+    const parts: string[] = [];
+    const push = (s: string)=>{ if (s) parts.push(s); };
+    if (T === 'level-up') {
+      push('⬆️ Sobe de nível');
+      if (det.minLevel != null) push(`Lv ${det.minLevel}`);
+      if (det.timeOfDay === 'day') push('🌞 Dia');
+      if (det.timeOfDay === 'night') push('🌙 Noite');
+      if (det.minHappiness != null) push(`😊 Felicidade ≥ ${det.minHappiness}`);
+      if (det.knownMoveType) push(`⚔️ Tipo ${this.typeLabel(det.knownMoveType)}`);
+      if (det.knownMove) push(`🎯 Golpe ${String(det.knownMove).replace(/-/g,' ')}`);
+      if (det.needsRain) push('🌧️ Chuva');
+      if (det.location) push(`📍 ${this.evoLocationPT(det.location)}`);
+      if (det.gender === 1) push('♀ Somente fêmea');
+      if (det.gender === 2) push('♂ Somente macho');
+      if (det.minAffection != null) push(`💞 Afeição ≥ ${det.minAffection}`);
+      if (det.minBeauty != null) push(`✨ Beleza ≥ ${det.minBeauty}`);
+      if (typeof det.relativeStats === 'number') {
+        if (det.relativeStats > 0) push('⚖️ Atk > Def');
+        else if (det.relativeStats < 0) push('⚖️ Atk < Def');
+        else push('⚖️ Atk = Def');
+      }
+      if (det.turnUpsideDown) push('🔄 Virar o dispositivo');
+      return parts.join(' • ');
+    }
+    if (T === 'use-item' && (det.item || e.item)) {
+      return `🪄 Usa item: ${this.evoItemPT(det.item || e.item || '')}`;
+    }
+    if (T === 'trade') {
+      const held = (det.heldItem || e.heldItem) ? ` com ${this.evoItemPT(det.heldItem || e.heldItem || '')}` : '';
+      const tradeFor = det.tradeSpecies ? ` por ${String(det.tradeSpecies).replace(/-/g,' ')}` : '';
+      return `🔁 Troca${held}${tradeFor}`;
+    }
+    return T;
+  }
+
+  goTo(codigo: number) {
+    // Navega para o detalhe do pokémon clicado na evolução sem recarregar a página
+    this.router.navigate(['/pokemon', codigo]);
   }
 }

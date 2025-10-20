@@ -15,6 +15,9 @@ POKE_IMG_BASE = os.getenv(
     "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork",
 )
 
+# Cache simples para traduções (sessão do processo)
+_TRANSLATE_CACHE: Dict[Tuple[str, str], str] = {}
+
 
 def _http_session() -> requests.Session:
     retry = Retry(total=3, backoff_factor=0.5, status_forcelist=[429, 500, 502, 503, 504])
@@ -142,6 +145,13 @@ def get_pokemon_detail(codigo: int, verify_override: Optional[bool] = None) -> D
     resp = s.get(f"{POKEAPI_BASE}/pokemon/{codigo}", timeout=20, verify=verify)
     resp.raise_for_status()
     norm = normalize_pokemon_detail(resp.json())
+    # Nome localizado (melhorar UX em PT)
+    try:
+        loc_name = _localized_species_name(s, codigo, verify, fallback=norm.get("nome"))
+        if loc_name:
+            norm["nome"] = loc_name
+    except Exception:
+        pass
 
     PokemonCache.objects.update_or_create(
         codigo=norm["codigo"],
@@ -181,6 +191,82 @@ def _pick_lang(entries: List[Dict], key_lang: str = "language", key_text: str = 
         return default
     txt = e.get(key_text) or e.get("short_effect") or e.get("effect") or default
     return (txt or default).replace("\n", " ").replace("\f", " ").strip()
+
+
+def _translate_to_pt(text: str, src_lang: Optional[str] = None) -> str:
+    """Traduz texto dinamicamente para pt-BR usando MyMemory (sem chave).
+
+    Controlado por env ENABLE_AUTO_TRANSLATE_PT (default=1). Em caso de falha, devolve o original.
+    """
+    if not text:
+        return text
+    if os.getenv("ENABLE_AUTO_TRANSLATE_PT", "1") != "1":
+        return text
+    # cache
+    try:
+        key = (text, (src_lang or "").lower())
+        if key in _TRANSLATE_CACHE:
+            return _TRANSLATE_CACHE[key]
+    except Exception:
+        pass
+
+    try:
+        s = _http_session()
+        # MyMemory exige langpair SRC|DEST com códigos de 2 letras (ou RFC3066)
+        src = (src_lang or "en").split("-")[0]  # ex: pt-BR -> pt
+        if src.lower() not in {"en","es","pt","fr","de","it","ja","zh","ko"}:
+            src = "en"
+        r = s.get(
+            "https://api.mymemory.translated.net/get",
+            params={"q": text, "langpair": f"{src}|pt-BR"},
+            timeout=10,
+            verify=True,
+        )
+        r.raise_for_status()
+        data = r.json() or {}
+        t = (data.get("responseData") or {}).get("translatedText")
+        if isinstance(t, str) and t.strip() and not t.strip().upper().startswith("'AUTO' IS AN INVALID"):
+            out = t.strip()
+            _TRANSLATE_CACHE[key] = out
+            return out
+    except Exception:
+        pass
+    # Fallback: LibreTranslate (instância pública)
+    try:
+        s = _http_session()
+        src = (src_lang or "en").split("-")[0]
+        payload = {"q": text, "source": src, "target": "pt"}
+        r = s.post("https://libretranslate.de/translate", json=payload, timeout=10, verify=True)
+        r.raise_for_status()
+        data = r.json() or {}
+        t = data.get("translatedText") or data.get("translated_text")
+        if isinstance(t, str) and t.strip():
+            out = t.strip()
+            _TRANSLATE_CACHE[key] = out
+            return out
+    except Exception:
+        pass
+    return text
+
+
+def _localized_species_name(session: requests.Session, codigo: int, verify: bool, fallback: Optional[str] = None) -> str:
+    """Obtém o nome da espécie em pt-BR/pt se disponível; senão devolve fallback/en."""
+    try:
+        rs = session.get(f"{POKEAPI_BASE}/pokemon-species/{codigo}", timeout=20, verify=verify)
+        rs.raise_for_status()
+        sp = rs.json()
+        # Tenta entrada em pt-BR/pt
+        for pref in ("pt-BR", "pt", "es", "en"):
+            for nm in sp.get("names", []) or []:
+                if (nm.get("language") or {}).get("name") == pref:
+                    val = (nm.get("name") or "").strip()
+                    if val:
+                        return val
+        # fallback ao campo padrão
+        fb = fallback or sp.get("name") or ""
+        return fb
+    except Exception:
+        return fallback or ""
 
 
 def _species_id_from_url(url: str) -> Optional[int]:
@@ -248,6 +334,12 @@ def get_pokemon_full(codigo: int, verify_override: Optional[bool] = None) -> Dic
     flavor_version = (flavor_entry.get("version") or {}).get("name")
     flavor_lang = (flavor_entry.get("language") or {}).get("name")
     genus = _pick_lang(species.get("genera", []), key_lang="language", key_text="genus", default="")
+    # Traduções para pt-BR
+    if flavor and flavor_lang not in ("pt-BR", "pt"):
+        flavor = _translate_to_pt(flavor, src_lang=flavor_lang)
+    if genus:
+        # genus costuma vir localizado, mas garantimos
+        genus = _translate_to_pt(genus, src_lang=flavor_lang or "en")
     gender_rate = species.get("gender_rate", -1)
     if gender_rate == -1:
         genders = {"male": False, "female": False, "genderless": True}
@@ -267,13 +359,28 @@ def get_pokemon_full(codigo: int, verify_override: Optional[bool] = None) -> Dic
             ra = s.get(f"{POKEAPI_BASE}/ability/{ab_name}", timeout=20, verify=verify)
             ra.raise_for_status()
             ad = ra.json()
+            # nome local
+            local_name = ab_name
+            for pref in ("pt-BR", "pt", "es", "en"):
+                for nm in ad.get("names", []) or []:
+                    if (nm.get("language") or {}).get("name") == pref:
+                        val = (nm.get("name") or "").strip()
+                        if val:
+                            local_name = val
+                            break
+                else:
+                    continue
+                break
             desc = _pick_lang(ad.get("effect_entries", []), key_lang="language", key_text="short_effect", default="")
+            if desc:
+                # os effect_entries geralmente vêm em en; se vierem em outro, deixe a API decidir
+                desc = _translate_to_pt(desc, src_lang=None)
         except Exception:
             desc = ""
         abilities.append({
-            "name": ab_name,
+            "nome": local_name,
             "isHidden": bool(ab.get("is_hidden")),
-            "description": desc,
+            "efeito": desc,
         })
 
     # height/weight conversions
@@ -316,9 +423,10 @@ def get_pokemon_full(codigo: int, verify_override: Optional[bool] = None) -> Dic
                         "tradeSpecies": (evo_detail.get("trade_species") or {}).get("name"),
                         "turnUpsideDown": bool(evo_detail.get("turn_upside_down")),
                     }
+                    local_name = _localized_species_name(s, sid, verify, fallback=name)
                     evo_list.append({
                         "codigo": sid,
-                        "nome": name,
+                        "nome": local_name or name,
                         "minLevel": cond["minLevel"],
                         "trigger": cond["trigger"],
                         "imagemUrl": image_url_for(sid),
@@ -340,6 +448,8 @@ def get_pokemon_full(codigo: int, verify_override: Optional[bool] = None) -> Dic
         "peso_kg": weight_kg,
         "habilidades": abilities,
         "genero": genders,
+        # Compatibilidade com frontend: fornecer efetividades com mesmo conteúdo
+        "efetividades": {"defesa": mult.get("from", {}), "ataque": mult.get("to", {})},
         "multiplicadores": mult,  # { from: {type:factor}, to: {type:factor} }
         "evolucoes": evo_list,
     }
@@ -383,7 +493,7 @@ def list_by_generation_and_name(
                 norm = normalize_pokemon_detail(rd.json())
                 page_items.append({
                     "codigo": codigo,
-                    "nome": item.get("name") or "",
+                    "nome": _localized_species_name(s, codigo, verify, fallback=item.get("name") or ""),
                     "tipos": norm.get("tipos", []),
                     "imagemUrl": norm.get("imagemUrl") or image_url_for(codigo),
                     "stats": norm.get("stats", {}),
@@ -391,7 +501,7 @@ def list_by_generation_and_name(
             except Exception:
                 page_items.append({
                     "codigo": codigo,
-                    "nome": item.get("name") or "",
+                    "nome": _localized_species_name(s, codigo, verify, fallback=item.get("name") or ""),
                     "tipos": [],
                     "imagemUrl": image_url_for(codigo),
                 })
@@ -431,7 +541,7 @@ def list_by_generation_and_name(
                 norm = normalize_pokemon_detail(rd.json())
                 page_items.append({
                     "codigo": codigo,
-                    "nome": sp_name,
+                    "nome": _localized_species_name(s, codigo, verify, fallback=sp_name),
                     "tipos": norm.get("tipos", []),
                     "imagemUrl": norm.get("imagemUrl") or image_url_for(codigo),
                     "stats": norm.get("stats", {}),
@@ -439,7 +549,7 @@ def list_by_generation_and_name(
             except Exception:
                 page_items.append({
                     "codigo": codigo,
-                    "nome": sp_name,
+                    "nome": _localized_species_name(s, codigo, verify, fallback=sp_name),
                     "tipos": [],
                     "imagemUrl": image_url_for(codigo),
                 })
@@ -470,7 +580,7 @@ def list_by_generation_and_name(
                 norm = normalize_pokemon_detail(rd.json())
                 page_items.append({
                     "codigo": pk,
-                    "nome": nm,
+                    "nome": _localized_species_name(s, pk, verify, fallback=nm),
                     "tipos": norm.get("tipos", []),
                     "imagemUrl": norm.get("imagemUrl") or image_url_for(pk),
                     "stats": norm.get("stats", {}),
@@ -478,7 +588,7 @@ def list_by_generation_and_name(
             except Exception:
                 page_items.append({
                     "codigo": pk,
-                    "nome": nm,
+                    "nome": _localized_species_name(s, pk, verify, fallback=nm),
                     "tipos": [],
                     "imagemUrl": image_url_for(pk),
                 })

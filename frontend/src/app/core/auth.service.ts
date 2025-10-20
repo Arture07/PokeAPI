@@ -12,6 +12,9 @@ export interface MeResponse {
   login: string;
   email: string;
   nome: string;
+  is_staff?: boolean;
+  is_superuser?: boolean;
+  is_active?: boolean;
 }
 
 @Injectable({
@@ -23,6 +26,7 @@ export class AuthService {
   private storageKeyRefresh = 'auth.refresh';
   private isBrowser = typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
   private apiBase = getApiBaseUrl();
+  private _meCache: MeResponse | null = null;
 
   get accessToken(): string | null {
     if (!this.isBrowser) return null;
@@ -51,6 +55,7 @@ export class AuthService {
 
   logout() {
     this.clearTokens();
+    this._meCache = null;
   }
 
   register(payload: { login: string; email: string; password: string; nome?: string }) {
@@ -69,5 +74,18 @@ export class AuthService {
       `${this.apiBase}/auth/reset-password/confirm/`,
       { login, token, new_password }
     );
+  }
+
+  // Utilitário simples para cachear /auth/me durante a sessão
+  get cachedMe(): MeResponse | null { return this._meCache; }
+  set cachedMe(v: MeResponse | null) { this._meCache = v; }
+
+  // Perfil do usuário
+  updateMe(payload: { nome?: string; email?: string }) {
+    return this.http.patch<{ detail: string; updated: string[] }>(`${this.apiBase}/auth/me/update/`, payload);
+  }
+
+  changePassword(current_password: string, new_password: string) {
+    return this.http.post<{ detail: string }>(`${this.apiBase}/auth/change-password/`, { current_password, new_password });
   }
 }

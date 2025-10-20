@@ -1,7 +1,7 @@
 import { HttpInterceptorFn } from '@angular/common/http';
 import { inject } from '@angular/core';
 import { AuthService } from './auth.service';
-import { environment } from '../../environments/environment';
+import { getApiBaseUrl } from './api.config';
 import { Router } from '@angular/router';
 import { catchError, throwError } from 'rxjs';
 
@@ -12,7 +12,8 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
 
   // Skip attaching Authorization for public endpoints to avoid 401 with stale/invalid tokens
   const url = req.url;
-  const base = environment.apiBaseUrl;
+  // Use the same resolver used by the services so comparisons actually match
+  const base = getApiBaseUrl();
   const isHealth = url.startsWith(`${base}/health/`);
   const isAuthPublic = url.startsWith(`${base}/auth/login/`) || url.startsWith(`${base}/auth/register/`);
   const isPokemon = url.startsWith(`${base}/pokemon/`);

@@ -6,13 +6,13 @@ import { provideClientHydration } from '@angular/platform-browser';
 import { HttpClient, provideHttpClient, withInterceptors, withFetch } from '@angular/common/http';
 import { authInterceptor } from './core/auth.interceptor';
 import { provideAnimations } from '@angular/platform-browser/animations';
-import { environment } from '../environments/environment';
+import { getApiBaseUrl } from './core/api.config';
 import { firstValueFrom } from 'rxjs';
 
 function appHealthCheck() {
   const http = inject(HttpClient);
   return () => firstValueFrom(
-    http.get(`${environment.apiBaseUrl}/health/`, { responseType: 'text' })
+    http.get(`${getApiBaseUrl()}/health/`, { responseType: 'text' })
   ).catch(() => void 0);
 }
 

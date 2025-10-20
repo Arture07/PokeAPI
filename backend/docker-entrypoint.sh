@@ -4,6 +4,11 @@ set -e
 # Migrations
 python manage.py migrate --noinput
 
+# Cria admin automático (opcional)
+if [ -n "$ADMIN_LOGIN" ] && [ -n "$ADMIN_EMAIL" ] && [ -n "$ADMIN_PASSWORD" ]; then
+	python manage.py create_admin || true
+fi
+
 # Collectstatic (não usado agora, mas deixado comentado)
 # python manage.py collectstatic --noinput
 
