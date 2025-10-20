@@ -125,10 +125,12 @@ def users_detail_view(request, user_id: int):
             "is_active": u.is_active, "is_staff": u.is_staff, "is_superuser": u.is_superuser
         })
     data = request.data or {}
-    # Permitimos atualização de nome, email e is_active
+    # Permitimos atualização de nome, email, is_active e flags administrativas
     nome = data.get("nome")
     email = data.get("email")
     is_active = data.get("is_active")
+    is_staff = data.get("is_staff")
+    is_superuser = data.get("is_superuser")
     updates = []
     if nome is not None:
         u.nome = str(nome)
@@ -139,6 +141,12 @@ def users_detail_view(request, user_id: int):
     if is_active is not None:
         u.is_active = bool(is_active)
         updates.append('is_active')
+    if is_staff is not None:
+        u.is_staff = bool(is_staff)
+        updates.append('is_staff')
+    if is_superuser is not None:
+        u.is_superuser = bool(is_superuser)
+        updates.append('is_superuser')
     if updates:
         u.save(update_fields=updates)
     return Response({"detail": "Atualizado", "updated": updates})
@@ -156,6 +164,29 @@ def admin_reset_user_password(request, user_id: int):
     u.set_password(str(new_password))
     u.save(update_fields=['password'])
     return Response({"detail": "Senha redefinida"})
+
+
+@api_view(["POST"])  # cria novo usuário (apenas staff)
+@permission_classes([IsAdminUser])
+def admin_create_user(request):
+    data = request.data or {}
+    login = data.get("login")
+    email = data.get("email")
+    password = data.get("password")
+    nome = data.get("nome", "")
+    is_staff = bool(data.get("is_staff", False))
+    is_superuser = bool(data.get("is_superuser", False))
+    if not login or not email or not password:
+        return Response({"detail": "login, email e password são obrigatórios"}, status=status.HTTP_400_BAD_REQUEST)
+    if User.objects.filter(login=login).exists():
+        return Response({"detail": "login já utilizado"}, status=status.HTTP_409_CONFLICT)
+    if User.objects.filter(email=email).exists():
+        return Response({"detail": "email já utilizado"}, status=status.HTTP_409_CONFLICT)
+    user = User.objects.create_user(login=login, email=email, password=password, name=nome, is_staff=is_staff, is_superuser=is_superuser, is_active=True)
+    return Response({
+        "id": user.id, "login": user.login, "email": user.email, "nome": user.nome,
+        "is_active": user.is_active, "is_staff": user.is_staff, "is_superuser": user.is_superuser
+    }, status=status.HTTP_201_CREATED)
 
 
 @api_view(["POST"])  # inicia reset emitindo token (dev)
@@ -217,6 +248,7 @@ api_urlpatterns = [
     path('admin/users/', users_list_view, name='admin_users_list'),
     path('admin/users/<int:user_id>/', users_detail_view, name='admin_users_detail'),
     path('admin/users/<int:user_id>/reset-password/', admin_reset_user_password, name='admin_users_reset_password'),
+    path('admin/users/create/', admin_create_user, name='admin_users_create'),
     path('auth/reset-password/', request_password_reset_token, name='request_password_reset_token'),
     path('auth/reset-password/confirm/', confirm_password_reset, name='confirm_password_reset'),
 ]

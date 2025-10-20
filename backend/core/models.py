@@ -13,7 +13,12 @@ class UsuarioManager(BaseUserManager):
         if not email:
             raise ValueError("O email é obrigatório")
         email = self.normalize_email(email)
-        user = self.model(login=login, email=email, nome=name or "", **extra_fields)
+        # Evitar conflito: quando REQUIRED_FIELDS inclui 'nome', o createsuperuser
+        # envia 'nome' dentro de extra_fields. Removemos de extra_fields e priorizamos
+        # esse valor em relação ao parâmetro 'name'.
+        nome_from_extra = extra_fields.pop("nome", None)
+        final_nome = nome_from_extra if nome_from_extra is not None else name
+        user = self.model(login=login, email=email, nome=final_nome or "", **extra_fields)
         if password:
             user.set_password(password)
         else:
@@ -30,7 +35,6 @@ class UsuarioManager(BaseUserManager):
             raise ValueError("Superuser must have is_staff=True.")
         if extra_fields.get("is_superuser") is not True:
             raise ValueError("Superuser must have is_superuser=True.")
-
         return self.create_user(login, email, password, name=name, **extra_fields)
 
 

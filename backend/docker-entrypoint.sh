@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -e
 
-# Migrations
+# Migrações
 python manage.py migrate --noinput
 
 # Cria admin automático (opcional)
@@ -9,8 +9,9 @@ if [ -n "$ADMIN_LOGIN" ] && [ -n "$ADMIN_EMAIL" ] && [ -n "$ADMIN_PASSWORD" ]; t
 	python manage.py create_admin || true
 fi
 
-# Collectstatic (não usado agora, mas deixado comentado)
+# Coleta de arquivos estáticos (desnecessário neste projeto)
 # python manage.py collectstatic --noinput
 
-# Start Gunicorn
-exec gunicorn pokeback.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 60
+# Inicia o Gunicorn na porta informada (Render define $PORT)
+PORT="${PORT:-8000}"
+exec gunicorn pokeback.wsgi:application --bind 0.0.0.0:${PORT} --workers 3 --timeout 60

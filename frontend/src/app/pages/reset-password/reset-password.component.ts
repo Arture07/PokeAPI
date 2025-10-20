@@ -13,9 +13,14 @@ import { MatButtonModule } from '@angular/material/button';
   standalone: true,
   imports: [CommonModule, ReactiveFormsModule, MatCardModule, MatFormFieldModule, MatInputModule, MatButtonModule],
   template: `
-  <div class="wrap">
-    <mat-card class="card">
-      <h1>Redefinir senha</h1>
+  <div class="wrap themed">
+    <div class="bg">
+      <div class="pokeball pb1"></div>
+      <div class="pokeball pb2"></div>
+      <div class="pokeball pb3"></div>
+    </div>
+    <mat-card class="card glass">
+      <h1 class="title">Redefinir senha</h1>
 
       <!-- Passo 1: solicitar token -->
       <form [formGroup]="formRequest" (ngSubmit)="request()" *ngIf="step===1">
@@ -23,7 +28,7 @@ import { MatButtonModule } from '@angular/material/button';
           <mat-label>Login</mat-label>
           <input matInput formControlName="login" required autocomplete="username">
         </mat-form-field>
-        <button mat-raised-button color="primary" class="full" type="submit" [disabled]="formRequest.invalid || loading">Gerar token</button>
+  <button mat-raised-button color="primary" class="full cta" type="submit" [disabled]="formRequest.invalid || loading">Gerar token</button>
         <p *ngIf="token" class="info">Token gerado (ambiente dev): <strong>{{ token }}</strong></p>
         <p *ngIf="error" class="warn">{{ error }}</p>
         <div class="actions"><button mat-button color="primary" type="button" (click)="goToStep2()" [disabled]="!token">Ir para confirmação</button></div>
@@ -47,7 +52,7 @@ import { MatButtonModule } from '@angular/material/button';
           <mat-label>Confirmar senha</mat-label>
           <input matInput type="password" formControlName="confirm" required autocomplete="new-password">
         </mat-form-field>
-        <button mat-raised-button color="primary" class="full" type="submit" [disabled]="formConfirm.invalid || loading">Redefinir</button>
+  <button mat-raised-button color="primary" class="full cta" type="submit" [disabled]="formConfirm.invalid || loading">Redefinir</button>
         <p *ngIf="success" class="ok">{{ success }}</p>
         <p *ngIf="error" class="warn">{{ error }}</p>
       </form>
@@ -55,9 +60,19 @@ import { MatButtonModule } from '@angular/material/button';
   </div>
   `,
   styles: [
-    `.wrap{min-height:calc(100vh - 64px);display:flex;align-items:center;justify-content:center;padding:24px}`,
+    `.wrap{min-height:calc(100vh - 64px);display:flex;align-items:center;justify-content:center;padding:24px;position:relative;overflow:hidden}`,
+    `.wrap.themed .bg{position:absolute;inset:0;pointer-events:none;}
+     .pokeball{position:absolute;border-radius:50%;background:radial-gradient(circle at 50% 50%, #fff 0 34%, #d32f2f 35% 68%, #212121 69% 72%, #fff 73% 100%);opacity:.15;filter:blur(1px)}
+     .pb1{width:420px;height:420px;top:-80px;left:-60px}
+     .pb2{width:320px;height:320px;bottom:-60px;right:10%}
+     .pb3{width:260px;height:260px;top:20%;right:-80px}
+    `,
     `.card{width:420px}`,
+    `.glass{background:rgba(255,255,255,.28) !important;border:1px solid rgba(255,255,255,.4);backdrop-filter:blur(8px);box-shadow:0 18px 42px rgba(0,0,0,.18);border-radius:16px !important}`,
+    `.title{display:flex;align-items:center;gap:8px;margin-bottom:8px;font-weight:800;letter-spacing:.3px}`,
     `.full{width:100%}`,
+    `.cta{box-shadow:0 8px 22px rgba(25,118,210,.35)}
+     .cta:focus-visible{outline:3px solid rgba(25,118,210,.35)}`,
     `.warn{color:#c62828;margin:8px 0 0}`,
     `.ok{color:#2e7d32;margin:8px 0 0}`,
     `.info{color:#1565c0;margin:8px 0 0}`,

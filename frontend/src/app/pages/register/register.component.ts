@@ -13,9 +13,14 @@ import { MatButtonModule } from '@angular/material/button';
   standalone: true,
   imports: [CommonModule, ReactiveFormsModule, MatCardModule, MatFormFieldModule, MatInputModule, MatButtonModule],
   template: `
-  <div class="wrap">
-    <mat-card class="card">
-      <h1>Criar conta</h1>
+  <div class="wrap themed">
+    <div class="bg">
+      <div class="pokeball pb1"></div>
+      <div class="pokeball pb2"></div>
+      <div class="pokeball pb3"></div>
+    </div>
+    <mat-card class="card glass">
+      <h1 class="title">Criar conta</h1>
       <form [formGroup]="form" (ngSubmit)="submit()">
         <mat-form-field appearance="outline" class="full">
           <mat-label>Login</mat-label>
@@ -50,16 +55,26 @@ import { MatButtonModule } from '@angular/material/button';
           <mat-error *ngIf="fc('confirm').hasError('required')">Confirme a senha.</mat-error>
           <mat-error *ngIf="(form.errors?.['passwordMismatch'] || form.hasError('passwordMismatch')) && (fc('confirm').touched || submitted)">As senhas não conferem.</mat-error>
         </mat-form-field>
-        <button mat-raised-button color="primary" type="submit" [disabled]="form.invalid || loading" class="full">Registrar</button>
+        <button mat-raised-button color="primary" type="submit" [disabled]="form.invalid || loading" class="full cta">Registrar</button>
         <p *ngIf="error" class="warn">{{ error }}</p>
       </form>
     </mat-card>
   </div>
   `,
   styles: [
-    `.wrap{min-height:calc(100vh - 64px);display:flex;align-items:center;justify-content:center;padding:24px}`,
+    `.wrap{min-height:calc(100vh - 64px);display:flex;align-items:center;justify-content:center;padding:24px;position:relative;overflow:hidden}`,
+    `.wrap.themed .bg{position:absolute;inset:0;pointer-events:none;}
+     .pokeball{position:absolute;border-radius:50%;background:radial-gradient(circle at 50% 50%, #fff 0 34%, #d32f2f 35% 68%, #212121 69% 72%, #fff 73% 100%);opacity:.15;filter:blur(1px)}
+     .pb1{width:420px;height:420px;top:-80px;left:-60px}
+     .pb2{width:320px;height:320px;bottom:-60px;right:10%}
+     .pb3{width:260px;height:260px;top:20%;right:-80px}
+    `,
     `.card{width:420px}`,
+    `.glass{background:rgba(255,255,255,.28) !important;border:1px solid rgba(255,255,255,.4);backdrop-filter:blur(8px);box-shadow:0 18px 42px rgba(0,0,0,.18);border-radius:16px !important}`,
+    `.title{display:flex;align-items:center;gap:8px;margin-bottom:8px;font-weight:800;letter-spacing:.3px}`,
     `.full{width:100%}`,
+    `.cta{box-shadow:0 8px 22px rgba(25,118,210,.35)}
+     .cta:focus-visible{outline:3px solid rgba(25,118,210,.35)}`,
     `.warn{color:#c62828;margin:8px 0 0}`,
   ]
 })

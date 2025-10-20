@@ -32,4 +32,8 @@ export class AdminService {
   resetPassword(id: number, new_password: string) {
     return this.http.post(`${this.base}/admin/users/${id}/reset-password/`, { new_password });
   }
+
+  createUser(payload: { login: string; email: string; password: string; nome?: string; is_staff?: boolean; is_superuser?: boolean }) {
+    return this.http.post<AdminUserItem>(`${this.base}/admin/users/create/`, payload);
+  }
 }

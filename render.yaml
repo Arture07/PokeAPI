@@ -1,0 +1,35 @@
+services:
+  # Backend: Django + Gunicorn (usa Dockerfile do backend)
+  - type: web
+    name: pokeapi-backend
+    env: docker
+    rootDir: backend
+    dockerfilePath: ./Dockerfile
+    branch: teste-codespace
+    plan: free
+    autoDeploy: true
+    healthCheckPath: /api/health/
+    envVars:
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+      - key: DEBUG
+        value: "0"
+      - key: ALLOWED_HOSTS
+        value: "*"
+
+  # Frontend: Angular como site estático
+  - type: static
+    name: pokeapi-frontend
+    rootDir: frontend
+    branch: teste-codespace
+    buildCommand: npm ci && npm run build
+    publishPath: dist/frontend/browser
+    # Rotas: proxy de /api/* para o backend e fallback SPA
+    routes:
+      # Atenção: ajuste o destino conforme a URL do backend na Render
+      - type: rewrite
+        source: /api/*
+        destination: https://pokeapi-backend.onrender.com/api/*
+      - type: rewrite
+        source: /*
+        destination: /index.html

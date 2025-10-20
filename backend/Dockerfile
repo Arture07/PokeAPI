@@ -19,12 +19,12 @@ COPY requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt \
     && pip install --no-cache-dir gunicorn
 
-# Copia código
+# Copia o código do backend
 COPY . /app
 
-# Entrypoint aplica migrações e sobe o servidor
+# Entrypoint aplica migrações e inicia o servidor
 COPY docker-entrypoint.sh /app/docker-entrypoint.sh
-# Normalize line endings in case the file was checked out with CRLF on Windows
+# Normaliza finais de linha (caso o arquivo tenha sido salvo com CRLF no Windows)
 RUN sed -i 's/\r$//' /app/docker-entrypoint.sh && chmod +x /app/docker-entrypoint.sh
 
 EXPOSE 8000

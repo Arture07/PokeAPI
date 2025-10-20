@@ -147,12 +147,30 @@ python backend/manage.py test pokemon -v 2
   - Tente `POKEAPI_VERIFY_SSL=0` no `.env` (ou `verify=0` nos endpoints públicos) apenas em dev.
 
 ## Notas de produção
-- Defina `DEBUG=0`, `ALLOWED_HOSTS` e um `DJANGO_SECRET_KEY` forte.
-- Considere usar Postgres no lugar de SQLite.
-- Ajuste throttling conforme necessidade de tráfego.
-- Parametrize TTL de cache de Pokémon via `POKEMON_CACHE_TTL_SECONDS`.
-- CORS: restringir domínios permitidos.
 
+## Deploy na Render
+
+Este repositório já possui um `render.yaml` para deploy automático de:
+
+- Backend (Django + Gunicorn) como serviço Web (Docker)
+- Frontend (Angular) como site estático com proxy de `/api/*` para o backend
+
+Passos:
+
+1. Importe o repositório na Render e escolha “Blueprint (render.yaml)”.
+2. Se preferir criar manualmente:
+  - Crie um serviço Web (Docker) apontando para `backend/`.
+  - Crie um Static Site apontando para `frontend/`, build `npm ci && npm run build`, publish `dist/frontend/browser`.
+  - Em “Routes” do Static, adicione um rewrite: `source: /api/*` → `destination: https://<BACKEND_HOST>/api/*`.
+3. Variáveis de ambiente no backend:
+  - `DJANGO_SECRET_KEY` (Generate
+)
+  - `DEBUG=0`
+  - `ALLOWED_HOSTS=*` (ou seu domínio)
+4. O Angular em produção usa `apiBaseUrl: '/api'` (arquivo `frontend/src/environments/environment.ts`).
+  O proxy é feito pelo Static Site via `routes`.
+
+Se o backend subir em outro domínio/nome, ajuste o `render.yaml` na rota do frontend ou defina `apiBaseUrl` conforme sua CDN/domínio.
 ## Próximos passos (P3 – Frontend Angular)
 - Bootstrap do front: Angular + Material, AuthInterceptor/Guard, serviço de API e tela de Login.
 - Telas: Listagem (filtros por geração/nome, cards com tipos, ações Favorito/Equipe), Favoritos e Equipe (máx 6).

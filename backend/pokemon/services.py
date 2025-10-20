@@ -392,6 +392,7 @@ def get_pokemon_full(codigo: int, verify_override: Optional[bool] = None) -> Dic
 
     # evolution chain
     evo_list: List[Dict] = []
+    evo_edges: List[Dict] = []
     try:
         evo_url = species.get("evolution_chain", {}).get("url")
         if evo_url:
@@ -424,6 +425,14 @@ def get_pokemon_full(codigo: int, verify_override: Optional[bool] = None) -> Dic
                         "turnUpsideDown": bool(evo_detail.get("turn_upside_down")),
                     }
                     local_name = _localized_species_name(s, sid, verify, fallback=name)
+                    # try to fetch types for child species to compose badges
+                    child_types: List[str] = []
+                    try:
+                        rd_child = s.get(f"{POKEAPI_BASE}/pokemon/{sid}", timeout=10, verify=verify)
+                        rd_child.raise_for_status()
+                        child_types = [t.get("type", {}).get("name") for t in (rd_child.json().get("types", []) or [])]
+                    except Exception:
+                        child_types = []
                     evo_list.append({
                         "codigo": sid,
                         "nome": local_name or name,
@@ -432,6 +441,21 @@ def get_pokemon_full(codigo: int, verify_override: Optional[bool] = None) -> Dic
                         "imagemUrl": image_url_for(sid),
                         "detalhes": cond,
                     })
+                    # Build edge from previous node to this node (skip for root)
+                    if prev_id is not None:
+                        evo_edges.append({
+                            "from": int(prev_id),
+                            "to": int(sid),
+                            **cond,
+                            "trigger": cond.get("trigger"),
+                            "detalhes": cond,
+                            "toData": {
+                                "codigo": int(sid),
+                                "nome": local_name or name,
+                                "imagemUrl": image_url_for(sid),
+                                "tipos": child_types,
+                            },
+                        })
                 for nxt in node.get("evolves_to", []) or []:
                     walk(nxt, sid)
             walk(chain)
@@ -452,6 +476,7 @@ def get_pokemon_full(codigo: int, verify_override: Optional[bool] = None) -> Dic
         "efetividades": {"defesa": mult.get("from", {}), "ataque": mult.get("to", {})},
         "multiplicadores": mult,  # { from: {type:factor}, to: {type:factor} }
         "evolucoes": evo_list,
+        "evolutionEdges": evo_edges,
     }
     return result
 
