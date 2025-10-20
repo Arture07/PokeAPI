@@ -5,7 +5,7 @@ services:
     env: docker
     rootDir: backend
     dockerfilePath: ./Dockerfile
-    branch: teste-codespace
+    branch: main
     plan: free
     autoDeploy: true
     healthCheckPath: /api/health/
@@ -21,7 +21,7 @@ services:
   - type: static
     name: pokeapi-frontend
     rootDir: frontend
-    branch: teste-codespace
+  branch: main
     buildCommand: npm ci && npm run build
     publishPath: dist/frontend/browser
     # Rotas: proxy de /api/* para o backend e fallback SPA
