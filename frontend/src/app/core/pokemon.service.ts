@@ -1,6 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
-import { environment } from '../../environments/environment';
+import { getApiBaseUrl } from './api.config';
 import { BehaviorSubject } from 'rxjs';
 
 export interface PokemonItem {
@@ -27,6 +27,7 @@ export interface Paginated<T> {
 @Injectable({ providedIn: 'root' })
 export class PokemonService {
   private http = inject(HttpClient);
+  private apiBase = getApiBaseUrl();
   // Contador reativo da equipe para mostrar no topo
   private teamCountSubject = new BehaviorSubject<number>(0);
   teamCount$ = this.teamCountSubject.asObservable();
@@ -40,12 +41,12 @@ export class PokemonService {
     if (params.name) p = p.set('name', params.name);
     if (params.limit != null) p = p.set('limit', params.limit);
     if (params.offset != null) p = p.set('offset', params.offset);
-    return this.http.get<Paginated<PokemonItem>>(`${environment.apiBaseUrl}/pokemon/`, { params: p });
+  return this.http.get<Paginated<PokemonItem>>(`${this.apiBase}/pokemon/`, { params: p });
   }
 
   // Detalhe de um pokémon (para obter tipos e garantir imagem)
   get(codigo: number) {
-    return this.http.get<PokemonItem>(`${environment.apiBaseUrl}/pokemon/${codigo}/`);
+  return this.http.get<PokemonItem>(`${this.apiBase}/pokemon/${codigo}/`);
   }
 
   // Fallback: busca direto na PokéAPI pública para obter stats caso backend não traga
@@ -55,23 +56,23 @@ export class PokemonService {
 
   // Favoritos
   getFavorites() {
-    return this.http.get<Paginated<PokemonItem>>(`${environment.apiBaseUrl}/pokemon/favorites/`);
+    return this.http.get<Paginated<PokemonItem>>(`${this.apiBase}/pokemon/favorites/`);
   }
   addFavorite(codigo: number) {
-    return this.http.post(`${environment.apiBaseUrl}/pokemon/favorites/`, { codigo });
+    return this.http.post(`${this.apiBase}/pokemon/favorites/`, { codigo });
   }
   removeFavorite(codigo: number) {
-    return this.http.delete(`${environment.apiBaseUrl}/pokemon/favorites/${codigo}/`);
+    return this.http.delete(`${this.apiBase}/pokemon/favorites/${codigo}/`);
   }
 
   // Equipe
   getTeam() {
-    return this.http.get<Paginated<PokemonItem>>(`${environment.apiBaseUrl}/pokemon/team/`);
+    return this.http.get<Paginated<PokemonItem>>(`${this.apiBase}/pokemon/team/`);
   }
   addToTeam(codigo: number) {
-    return this.http.post(`${environment.apiBaseUrl}/pokemon/team/`, { codigo });
+    return this.http.post(`${this.apiBase}/pokemon/team/`, { codigo });
   }
   removeFromTeam(codigo: number) {
-    return this.http.delete(`${environment.apiBaseUrl}/pokemon/team/${codigo}/`);
+    return this.http.delete(`${this.apiBase}/pokemon/team/${codigo}/`);
   }
 }
