@@ -12,6 +12,7 @@ from pokemon.views import (
     sync_tipos,
     list_pokemon,
     get_pokemon,
+    get_pokemon_completo,
     favorites_view,
     favorites_detail_view,
     team_view,
@@ -110,6 +111,7 @@ api_urlpatterns = [
     path('pokemon/sync-types/', sync_tipos, name='pokemon_sync_types'),
     path('pokemon/', list_pokemon, name='pokemon_list'),
     path('pokemon/<int:codigo>/', get_pokemon, name='pokemon_detail'),
+    path('pokemon/<int:codigo>/full/', get_pokemon_completo, name='pokemon_detail_full'),
 
     # favoritos
     path('pokemon/favorites/', favorites_view, name='pokemon_favorites'),

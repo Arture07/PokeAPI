@@ -51,4 +51,22 @@ export class AuthService {
   logout() {
     this.clearTokens();
   }
+
+  register(payload: { login: string; email: string; password: string; nome?: string }) {
+    return this.http.post(`${environment.apiBaseUrl}/auth/register/`, payload);
+  }
+
+  requestPasswordReset(login: string) {
+    return this.http.post<{ login: string; token?: string; detail?: string }>(
+      `${environment.apiBaseUrl}/auth/reset-password/`,
+      { login }
+    );
+  }
+
+  confirmPasswordReset(login: string, token: string, new_password: string) {
+    return this.http.post<{ detail: string }>(
+      `${environment.apiBaseUrl}/auth/reset-password/confirm/`,
+      { login, token, new_password }
+    );
+  }
 }

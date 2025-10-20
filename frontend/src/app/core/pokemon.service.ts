@@ -8,6 +8,15 @@ export interface PokemonItem {
   nome: string;
   tipos: string[];
   imagemUrl?: string;
+  stats?: {
+    hp: number;
+    attack: number;
+    defense: number;
+    spAttack?: number;
+    spDefense?: number;
+    speed?: number;
+    total?: number;
+  };
 }
 
 export interface Paginated<T> {
@@ -37,6 +46,11 @@ export class PokemonService {
   // Detalhe de um pokémon (para obter tipos e garantir imagem)
   get(codigo: number) {
     return this.http.get<PokemonItem>(`${environment.apiBaseUrl}/pokemon/${codigo}/`);
+  }
+
+  // Fallback: busca direto na PokéAPI pública para obter stats caso backend não traga
+  getFromPokeApiRaw(codigo: number) {
+    return this.http.get<any>(`https://pokeapi.co/api/v2/pokemon/${codigo}`);
   }
 
   // Favoritos

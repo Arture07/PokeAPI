@@ -2,15 +2,20 @@ import { Routes } from '@angular/router';
 import { authGuard } from './core/auth.guard';
 import { LoginComponent } from './pages/login/login.component';
 import { ShellComponent } from './layout/shell.component';
+import { RegisterComponent } from './pages/register/register.component';
+import { ResetPasswordComponent } from './pages/reset-password/reset-password.component';
 
 export const routes: Routes = [
 	{ path: 'login', component: LoginComponent },
+	{ path: 'registrar', component: RegisterComponent },
+	{ path: 'esqueci-senha', component: ResetPasswordComponent },
 	{
 		path: '',
 		component: ShellComponent,
 		canActivate: [authGuard],
 		children: [
 			{ path: 'pokemon', loadComponent: () => import('./pages/pokemon/list.component').then(m => m.PokemonListComponent) },
+					{ path: 'pokemon/:codigo', loadComponent: () => import('./pages/pokemon/detail.component').then(m => m.PokemonDetailComponent) },
 			{ path: 'favoritos', loadComponent: () => import('./pages/favoritos/favoritos.component').then(m => m.FavoritosComponent) },
 			{ path: 'equipe', loadComponent: () => import('./pages/equipe/equipe.component').then(m => m.EquipeComponent) },
 			{ path: '', pathMatch: 'full', redirectTo: 'pokemon' },

@@ -4,7 +4,7 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework import status
 from .models import TipoPokemon, PokemonUsuario
-from .services import sync_types_from_pokeapi, list_by_generation_and_name, get_pokemon_detail
+from .services import sync_types_from_pokeapi, list_by_generation_and_name, get_pokemon_detail, get_pokemon_full
 from django.conf import settings
 from rest_framework import serializers
 
@@ -72,6 +72,20 @@ def get_pokemon(request, codigo: int):
         if verify_param in ("0", "1"):
             verify = verify_param == "1"
         data = get_pokemon_detail(codigo, verify_override=verify)
+        return Response(data)
+    except Exception as exc:
+        return Response({"detail": f"Erro ao consultar PokéAPI: {exc}"}, status=status.HTTP_502_BAD_GATEWAY)
+
+
+@api_view(["GET"])  # público
+@permission_classes([AllowAny])
+def get_pokemon_completo(request, codigo: int):
+    try:
+        verify_param = request.query_params.get("verify")
+        verify = None
+        if verify_param in ("0", "1"):
+            verify = verify_param == "1"
+        data = get_pokemon_full(codigo, verify_override=verify)
         return Response(data)
     except Exception as exc:
         return Response({"detail": f"Erro ao consultar PokéAPI: {exc}"}, status=status.HTTP_502_BAD_GATEWAY)

@@ -4,3 +4,13 @@
 	This fixes: "Could not find Angular Material core theme" */
 @import '@angular/material/prebuilt-themes/indigo-pink.css';
 
+/* Layout base */
+html, body, app-root {
+	height: 100%;
+}
+body {
+	margin: 0; /* remove bordas brancas ao redor do header */
+	font-family: Roboto, Arial, sans-serif;
+	background: #fafafa;
+}
+
