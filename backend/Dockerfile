@@ -1,5 +1,13 @@
 # syntax=docker/dockerfile:1
 
+FROM node:20-alpine AS build-frontend
+WORKDIR /app/frontend
+# Copia o frontend a partir do contexto raiz do repositório
+COPY frontend/package*.json ./
+RUN npm ci --silent
+COPY frontend/ ./
+RUN npm run build
+
 FROM python:3.11-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -15,16 +23,18 @@ RUN apt-get update \
     && pip install --no-cache-dir --upgrade pip
 
 # Instala dependências Python
-COPY requirements.txt /app/requirements.txt
+# Copia apenas os arquivos do backend necessários
+COPY backend/requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt \
     && pip install --no-cache-dir gunicorn
 
 # Copia o código do backend
-COPY . /app
+# Copia o código do backend
+COPY backend/ /app/
+# Copia o build do frontend para ser servido pela aplicação
+COPY --from=build-frontend /app/frontend/dist/frontend/browser /app/public
 
-# Entrypoint aplica migrações e inicia o servidor
 COPY docker-entrypoint.sh /app/docker-entrypoint.sh
-# Normaliza finais de linha (caso o arquivo tenha sido salvo com CRLF no Windows)
 RUN sed -i 's/\r$//' /app/docker-entrypoint.sh && chmod +x /app/docker-entrypoint.sh
 
 EXPOSE 8000

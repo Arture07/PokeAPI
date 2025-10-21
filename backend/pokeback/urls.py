@@ -1,5 +1,7 @@
 from django.contrib import admin
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponse
+from django.conf import settings
+import os
 from django.urls import path, include
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated, IsAdminUser
@@ -25,6 +27,14 @@ User = get_user_model()
 
 def health_view(request):
     return JsonResponse({"status": "ok"})
+
+def spa_index_view(request):
+    # Serve o index.html gerado pelo Angular
+    index_path = os.path.join(settings.BASE_DIR, 'public', 'index.html')
+    if os.path.exists(index_path):
+        with open(index_path, 'rb') as f:
+            return HttpResponse(f.read(), content_type='text/html')
+    return JsonResponse({"detail": "SPA não encontrada"}, status=404)
 
 
 @api_view(["POST"])
@@ -259,4 +269,6 @@ urlpatterns = [
     path('', include(api_urlpatterns)),
     # com prefixo /api
     path('api/', include((api_urlpatterns, 'api'), namespace='api')),
+    # Fallback SPA (depois das rotas de API)
+    path('', spa_index_view),
 ]

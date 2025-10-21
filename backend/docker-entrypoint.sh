@@ -9,8 +9,8 @@ if [ -n "$ADMIN_LOGIN" ] && [ -n "$ADMIN_EMAIL" ] && [ -n "$ADMIN_PASSWORD" ]; t
 	python manage.py create_admin || true
 fi
 
-# Coleta de arquivos estáticos (desnecessário neste projeto)
-# python manage.py collectstatic --noinput
+# Coleta de arquivos estáticos (ajuda no cache/WhiteNoise)
+python manage.py collectstatic --noinput || true
 
 # Inicia o Gunicorn na porta informada (Render define $PORT)
 PORT="${PORT:-8000}"
