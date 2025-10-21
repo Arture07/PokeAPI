@@ -29,12 +29,10 @@ RUN pip install --no-cache-dir -r /app/requirements.txt \
     && pip install --no-cache-dir gunicorn
 
 # Copia o código do backend
-# Copia o código do backend
 COPY backend/ /app/
 # Copia o build do frontend para ser servido pela aplicação
 COPY --from=build-frontend /app/frontend/dist/frontend/browser /app/public
 
-COPY docker-entrypoint.sh /app/docker-entrypoint.sh
 RUN sed -i 's/\r$//' /app/docker-entrypoint.sh && chmod +x /app/docker-entrypoint.sh
 
 EXPOSE 8000
